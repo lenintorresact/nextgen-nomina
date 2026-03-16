@@ -1,9 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { Container, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableRow, Divider, Box } from '@mui/material';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+import API_URL from '../api_config';
 
 const EmployeeDashboard: React.FC = () => {
+  const { getToken, user } = useAuth();
   const [slips, setSlips] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchSlips = async () => {
+        if (!user) return;
+        try {
+            const token = await getToken();
+            const headers = { Authorization: `Bearer ${token}` };
+            // In a real app, we'd have an endpoint to fetch slips for the current employee
+            // For now, we simulate fetching based on the user's role/id if available
+            console.log("Fetching slips for user", user.uid);
+        } catch (error) {
+            console.error("Failed to fetch slips", error);
+        }
+    };
+    fetchSlips();
+  }, [getToken, user]);
 
   return (
     <Container sx={{ mt: 4 }}>

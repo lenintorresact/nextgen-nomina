@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
 import { Container, Typography, TextField, Button, Box, MenuItem } from '@mui/material';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import API_URL from '../api_config';
 
 const Onboarding: React.FC = () => {
+  const { getToken } = useAuth();
+  const navigate = useNavigate();
   const [company, setCompany] = useState({
     ruc: '',
     name: '',
@@ -12,11 +17,11 @@ const Onboarding: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = await (window as any).firebaseUser?.getIdToken();
-      await axios.post('http://localhost:8000/companies/', company, {
+      const token = await getToken();
+      await axios.post(`${API_URL}/companies/`, company, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      window.location.href = '/dashboard';
+      navigate('/dashboard');
     } catch (error) {
       console.error("Failed to create company", error);
     }

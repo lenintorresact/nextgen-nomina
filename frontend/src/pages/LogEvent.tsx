@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Typography, TextField, Button, Box, MenuItem, Autocomplete } from '@mui/material';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import API_URL from '../api_config';
 
 const LogEvent: React.FC = () => {
+  const { getToken } = useAuth();
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState<any[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [event, setEvent] = useState({
@@ -13,13 +18,39 @@ const LogEvent: React.FC = () => {
   });
 
   useEffect(() => {
-    // Fetch employees for the dropdown
-    // (In a real app, you'd get the company ID from context/state)
-  }, []);
+    const fetchEmployees = async () => {
+        try {
+            const token = await getToken();
+            const headers = { Authorization: `Bearer ${token}` };
+            const compRes = await axios.get(`${API_URL}/companies/`, { headers });
+            if (compRes.data.length > 0) {
+                const empRes = await axios.get(`${API_URL}/employees/company/${compRes.data[0].id}`, { headers });
+                setEmployees(empRes.data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch employees", error);
+        }
+    };
+    fetchEmployees();
+  }, [getToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Implementation for posting event to /payroll/events
+    if (!selectedEmployee) return;
+
+    try {
+        const token = await getToken();
+        await axios.post(`${API_URL}/payroll/events`, {
+            ...event,
+            employee_id: selectedEmployee.id,
+            company_id: selectedEmployee.company_id
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        navigate('/dashboard');
+    } catch (error) {
+        console.error("Failed to log event", error);
+    }
   };
 
   return (
@@ -31,7 +62,7 @@ const LogEvent: React.FC = () => {
             options={employees}
             getOptionLabel={(option) => `${option.first_name} ${option.last_name}`}
             onChange={(_, val) => setSelectedEmployee(val)}
-            renderInput={(params) => <TextField {...params} label="Empleado" margin="normal" />}
+            renderInput={(params) => <TextField {...params} label="Empleado" margin="normal" required />}
           />
 
           <TextField
@@ -56,6 +87,7 @@ const LogEvent: React.FC = () => {
             margin="normal"
             value={event.amount}
             onChange={(e) => setEvent({ ...event, amount: parseFloat(e.target.value) })}
+            required
           />
 
           <TextField
@@ -64,6 +96,7 @@ const LogEvent: React.FC = () => {
             margin="normal"
             value={event.description}
             onChange={(e) => setEvent({ ...event, description: e.target.value })}
+            required
           />
 
           <Button type="submit" fullWidth variant="contained" sx={{ mt: 3 }}>

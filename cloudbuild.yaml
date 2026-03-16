@@ -1,0 +1,25 @@
+steps:
+  # 1. Build & Push Backend
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/payroll-backend', './backend']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/payroll-backend']
+
+  # 2. Deploy Backend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'payroll-backend'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/payroll-backend'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+
+  # 3. Build & Push Frontend (Injecting Backend URL)
+  # This part is complex in Cloud Build because we need the URL from step 2
+  # For the MVP, we recommend manual deploy or using environment variables
