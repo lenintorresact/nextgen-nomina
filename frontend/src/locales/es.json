@@ -1,0 +1,28 @@
+{
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "continue": "Continuar",
+    "logout": "Cerrar Sesión"
+  },
+  "login": {
+    "title": "Nómina Ecuador",
+    "subtitle": "Sistema de nómina para micro y pequeñas empresas.",
+    "google_button": "Iniciar sesión con Google"
+  },
+  "dashboard": {
+    "employees": "Empleados",
+    "add_employee": "Añadir",
+    "quick_actions": "Acciones Rápidas",
+    "log_event": "Registrar Novedad",
+    "close_period": "Cerrar Mes"
+  },
+  "payroll": {
+    "base_salary": "Sueldo Base",
+    "net_salary": "Sueldo Neto",
+    "iess": "IESS Personal",
+    "thirteenth": "Décimo Tercero",
+    "fourteenth": "Décimo Cuarto",
+    "reserve_funds": "Fondos de Reserva"
+  }
+}
