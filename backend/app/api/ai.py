@@ -8,14 +8,14 @@ from vertexai.generative_models import GenerativeModel, Part
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
+# Initialize Vertex AI once at module level
+vertexai.init(project=os.getenv("GOOGLE_CLOUD_PROJECT"), location="us-central1")
+model = GenerativeModel("gemini-1.5-flash-002")
+
 @router.post("/extract-employee")
 async def extract_employee_data(file: UploadFile = File(...), user=Depends(get_current_user)):
     try:
         content = await file.read()
-
-        # Initialize Vertex AI
-        vertexai.init(project=os.getenv("GOOGLE_CLOUD_PROJECT"), location="us-central1")
-        model = GenerativeModel("gemini-1.5-flash-002")
 
         prompt = """
         Extract employee information from this document image/PDF.

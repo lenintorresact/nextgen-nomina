@@ -33,10 +33,14 @@ const AddEmployee: React.FC = () => {
 
         let dataStr = response.data.extracted_data;
         // Clean markdown if present
-        if (dataStr.includes('```json')) {
-            dataStr = dataStr.split('```json')[1].split('```')[0].trim();
-        } else if (dataStr.includes('```')) {
-            dataStr = dataStr.split('```')[1].split('```')[0].trim();
+        try {
+            if (dataStr.includes('```json')) {
+                dataStr = dataStr.split('```json')[1].split('```')[0].trim();
+            } else if (dataStr.includes('```')) {
+                dataStr = dataStr.split('```')[1].split('```')[0].trim();
+            }
+        } catch (e) {
+            console.warn("Regex cleaning failed, trying raw data", e);
         }
 
         const extracted = JSON.parse(dataStr);

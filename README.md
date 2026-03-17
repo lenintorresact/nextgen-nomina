@@ -2,42 +2,30 @@
 
 This is a standalone, mobile-first payroll system designed for micro and small businesses in Ecuador.
 
-## Features
-- Automatic payroll calculation (IESS, 13th/14th salaries, etc.).
-- AI-assisted employee onboarding (Gemini).
-- Multi-tenant architecture on Google Cloud Firestore.
-- Mobile-responsive React frontend.
-- Automated CI/CD pipeline.
+## Infrastructure as Code (Terraform)
 
-## Prerequisites
-1.  **Google Cloud Project:** Create a project in [Google Cloud Console](https://console.cloud.google.com/).
-2.  **Firebase Project:** Enable Firebase for your Google Cloud project.
-    - Enable **Authentication** (Google Sign-In).
-    - Enable **Firestore Database** in Native Mode.
-3.  **APIs:** Enable the following APIs: Cloud Run, Cloud Build, Artifact Registry, Vertex AI.
+We use Terraform to manage Google Cloud resources.
+
+### Provisioning Infrastructure
+1.  **Install Terraform:** [Download here](https://www.terraform.io/downloads).
+2.  **Authenticate:** `gcloud auth application-default login`.
+3.  **Initialize & Apply:**
+    ```bash
+    cd terraform
+    terraform init
+    terraform apply -var="project_id=[YOUR_PROJECT_ID]"
+    ```
+This will enable all required APIs, create the Firestore database, and set up the Artifact Registry.
 
 ## Automated Deployment (GitHub Actions)
 
-Every push to the `main` branch (or development branch) triggers a deployment to Google Cloud Run.
+Every push to the `main` branch triggers a deployment to Google Cloud Run.
 
-### Step 1: Create a Service Account
-Create a Service Account in GCP with the following roles:
-- Cloud Run Admin
-- Storage Admin
-- Artifact Registry Administrator
-- Service Account User
-- Cloud Build Editor
-
-### Step 2: Configure GitHub Secrets
-In your GitHub repository, go to **Settings > Secrets and variables > Actions** and add:
+### Step 1: GitHub Secrets
+After running Terraform, you'll have a service account named `github-actions-deployer`. Generate a JSON key for it and add it to GitHub. Also, you must provide the Firebase credentials:
 - `GCP_PROJECT_ID`: Your Google Cloud Project ID.
-- `GCP_SA_KEY`: The JSON key of the service account created in Step 1.
-
-### Step 3: Artifact Registry
-Create a Docker repository named `payroll` in Artifact Registry:
-```bash
-gcloud artifacts repositories create payroll --repository-format=docker --location=us-central1
-```
+- `GCP_SA_KEY`: The JSON key of the service account.
+- `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, etc.: Credentials from your Firebase project settings.
 
 ## Local Development
 
