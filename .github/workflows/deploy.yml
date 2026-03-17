@@ -2,7 +2,7 @@ name: Deploy to Cloud Run
 
 on:
   push:
-    branches: [ main, payroll-system-ecuador-mvp-v2 ] # Trigger on main or current development branch
+    branches: [ main, payroll-system-ecuador-final-v3 ] # Trigger on main or final release branch
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
