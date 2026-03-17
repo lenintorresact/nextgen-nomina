@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .app.api import companies, employees, payroll, ai
+from app.api import companies, employees, payroll, ai, employee_portal
 
 app = FastAPI(title="Payroll Ecuador API")
 
@@ -16,6 +16,7 @@ app.include_router(companies.router)
 app.include_router(employees.router)
 app.include_router(payroll.router)
 app.include_router(ai.router)
+app.include_router(employee_portal.router)
 
 @app.get("/")
 async def root():

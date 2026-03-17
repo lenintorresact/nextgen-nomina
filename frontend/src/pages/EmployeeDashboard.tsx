@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableRow, Divider, Box } from '@mui/material';
+import { Container, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableRow, Divider, Box, CircularProgress } from '@mui/material';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import API_URL from '../api_config';
@@ -7,29 +7,36 @@ import API_URL from '../api_config';
 const EmployeeDashboard: React.FC = () => {
   const { getToken, user } = useAuth();
   const [slips, setSlips] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchSlips = async () => {
-        if (!user) return;
+        if (!user) {
+            setLoading(false);
+            return;
+        }
         try {
             const token = await getToken();
             const headers = { Authorization: `Bearer ${token}` };
-            // In a real app, we'd have an endpoint to fetch slips for the current employee
-            // For now, we simulate fetching based on the user's role/id if available
-            console.log("Fetching slips for user", user.uid);
+            const response = await axios.get(`${API_URL}/employee-portal/my-slips`, { headers });
+            setSlips(response.data);
         } catch (error) {
             console.error("Failed to fetch slips", error);
+        } finally {
+            setLoading(false);
         }
     };
     fetchSlips();
   }, [getToken, user]);
+
+  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>;
 
   return (
     <Container sx={{ mt: 4 }}>
       <Typography variant="h4" gutterBottom>Mis Roles de Pago</Typography>
 
       {slips.length === 0 ? (
-        <Typography color="textSecondary">No tienes roles de pago generados aún.</Typography>
+        <Typography color="textSecondary">No tienes roles de pago generados aún para tu correo: {user?.email}</Typography>
       ) : (
         slips.map((slip) => (
           <Paper key={slip.id} elevation={2} sx={{ p: 3, mb: 3 }}>
@@ -54,6 +61,10 @@ const EmployeeDashboard: React.FC = () => {
                   <TableRow>
                     <TableCell sx={{ fontWeight: 'bold' }}>IESS Personal (9.45%)</TableCell>
                     <TableCell align="right" sx={{ color: 'error.main' }}>-${slip.iess_employee.toFixed(2)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Líquido a Recibir</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>${slip.net_salary.toFixed(2)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>

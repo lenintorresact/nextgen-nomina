@@ -2,51 +2,55 @@
 
 This is a standalone, mobile-first payroll system designed for micro and small businesses in Ecuador.
 
+## Features
+- Automatic payroll calculation (IESS, 13th/14th salaries, etc.).
+- AI-assisted employee onboarding (Gemini).
+- Multi-tenant architecture on Google Cloud Firestore.
+- Mobile-responsive React frontend.
+- Automated CI/CD pipeline.
+
 ## Prerequisites
 1.  **Google Cloud Project:** Create a project in [Google Cloud Console](https://console.cloud.google.com/).
-2.  **Firebase Project:** Enable Firebase for your Google Cloud project at [Firebase Console](https://console.firebase.google.com/).
+2.  **Firebase Project:** Enable Firebase for your Google Cloud project.
     - Enable **Authentication** (Google Sign-In).
     - Enable **Firestore Database** in Native Mode.
-3.  **Google Cloud SDK:** Install and initialize the `gcloud` CLI.
+3.  **APIs:** Enable the following APIs: Cloud Run, Cloud Build, Artifact Registry, Vertex AI.
 
-## Deployment Guide (Google Cloud Run)
+## Automated Deployment (GitHub Actions)
 
-We have provided a `deploy.sh` script to automate the process.
+Every push to the `main` branch (or development branch) triggers a deployment to Google Cloud Run.
 
-### Step 1: Configuration
-Update the `firebaseConfig` in `frontend/src/firebase.ts` with your actual Firebase project credentials.
+### Step 1: Create a Service Account
+Create a Service Account in GCP with the following roles:
+- Cloud Run Admin
+- Storage Admin
+- Artifact Registry Administrator
+- Service Account User
+- Cloud Build Editor
 
-### Step 2: Run Deployment Script
-Ensure you are authenticated and have the correct project selected:
+### Step 2: Configure GitHub Secrets
+In your GitHub repository, go to **Settings > Secrets and variables > Actions** and add:
+- `GCP_PROJECT_ID`: Your Google Cloud Project ID.
+- `GCP_SA_KEY`: The JSON key of the service account created in Step 1.
+
+### Step 3: Artifact Registry
+Create a Docker repository named `payroll` in Artifact Registry:
 ```bash
-gcloud auth login
-gcloud config set project [YOUR_PROJECT_ID]
-chmod +x deploy.sh
-./deploy.sh
+gcloud artifacts repositories create payroll --repository-format=docker --location=us-central1
 ```
-
-### Step 3: Enable APIs
-You must enable the following APIs in your Google Cloud Project:
-- Cloud Run API
-- Cloud Build API
-- Artifact Registry API
-- Vertex AI API (for document scanning)
-- Firestore API
 
 ## Local Development
 
-### Backend Setup
-1. Navigate to `backend/`
-2. Create a virtual environment: `python -m venv venv`
-3. Activate it: `source venv/bin/activate`
-4. Install dependencies: `pip install -r requirements.txt`
-5. Run: `uvicorn main:app --reload`
+### Backend
+1. `cd backend`
+2. `pip install -r requirements.txt`
+3. `uvicorn main:app --reload`
 
-### Frontend Setup
-1. Navigate to `frontend/`
-2. Install dependencies: `npm install`
-3. Create a `.env` file: `VITE_API_URL=http://localhost:8000`
-4. Run: `npm run dev`
+### Frontend
+1. `cd frontend`
+2. `npm install`
+3. Create `.env`: `VITE_API_URL=http://localhost:8000`
+4. `npm run dev`
 
 ## Tech Stack
 - **Frontend:** React + TypeScript + Material UI (MUI)
