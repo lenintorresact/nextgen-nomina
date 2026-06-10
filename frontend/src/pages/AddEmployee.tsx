@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Container, Typography, TextField, Button, Box, IconButton } from '@mui/material';
-import PhotoCamera from '@mui/icons-material/PhotoCamera';
+import { Container, Typography, TextField, Button, Box } from '@mui/material';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -19,37 +18,6 @@ const AddEmployee: React.FC = () => {
     contract_type: 'Indefinido',
     company_id: ''
   });
-
-  const handleScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      const formData = new FormData();
-      formData.append('file', e.target.files[0]);
-
-      try {
-        const token = await getToken();
-        const response = await axios.post(`${API_URL}/ai/extract-employee`, formData, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-
-        let dataStr = response.data.extracted_data;
-        // Clean markdown if present
-        try {
-            if (dataStr.includes('```json')) {
-                dataStr = dataStr.split('```json')[1].split('```')[0].trim();
-            } else if (dataStr.includes('```')) {
-                dataStr = dataStr.split('```')[1].split('```')[0].trim();
-            }
-        } catch (e) {
-            console.warn("Regex cleaning failed, trying raw data", e);
-        }
-
-        const extracted = JSON.parse(dataStr);
-        setEmployee(prev => ({ ...prev, ...extracted }));
-      } catch (error) {
-        console.error("AI Scan failed", error);
-      }
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,14 +45,6 @@ const AddEmployee: React.FC = () => {
     <Container maxWidth="xs">
       <Box sx={{ mt: 4 }}>
         <Typography variant="h5" gutterBottom>Nuevo Empleado</Typography>
-
-        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography>Escanear desde Cédula/PDF:</Typography>
-            <IconButton color="primary" component="label">
-                <input hidden accept="image/*,application/pdf" type="file" onChange={handleScan} />
-                <PhotoCamera />
-            </IconButton>
-        </Box>
 
         <form onSubmit={handleSubmit}>
           <TextField fullWidth label="Cédula" margin="normal" value={employee.cedula} onChange={e => setEmployee({...employee, cedula: e.target.value})} required />

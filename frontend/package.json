@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "start": "superstatic dist --port ${PORT:-8080} --host 0.0.0.0 --config superstatic.json",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -20,7 +21,8 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-i18next": "^16.5.8",
-    "react-router-dom": "^7.13.1"
+    "react-router-dom": "^7.13.1",
+    "superstatic": "^9.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

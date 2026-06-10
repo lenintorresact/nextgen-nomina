@@ -1,0 +1,45 @@
+# Configuración de Firebase App Hosting para el frontend (Vite + React).
+# El frontend se sirve como sitio estático con superstatic (ver package.json "start").
+# Todas las variables VITE_* se incrustan en tiempo de compilación (availability: BUILD).
+# Los valores de Firebase Web son configuración pública del cliente, no secretos.
+
+runConfig:
+  minInstances: 0
+  maxInstances: 1
+
+env:
+  # URL del backend (Cloud Run). Se completa tras desplegar el backend.
+  - variable: VITE_API_URL
+    value: https://payroll-backend-27rtlf4l3q-uc.a.run.app
+    availability:
+      - BUILD
+
+  - variable: VITE_FIREBASE_API_KEY
+    value: AIzaSyA8U5puLDkNb2J5AY1w90LVnK8W7pXJu2k
+    availability:
+      - BUILD
+
+  - variable: VITE_FIREBASE_AUTH_DOMAIN
+    value: easy-nom-stage.firebaseapp.com
+    availability:
+      - BUILD
+
+  - variable: VITE_FIREBASE_PROJECT_ID
+    value: easy-nom-stage
+    availability:
+      - BUILD
+
+  - variable: VITE_FIREBASE_STORAGE_BUCKET
+    value: easy-nom-stage.firebasestorage.app
+    availability:
+      - BUILD
+
+  - variable: VITE_FIREBASE_MESSAGING_SENDER_ID
+    value: "567103925732"
+    availability:
+      - BUILD
+
+  - variable: VITE_FIREBASE_APP_ID
+    value: 1:567103925732:web:cee7f80caa5ac00a44ebf1
+    availability:
+      - BUILD

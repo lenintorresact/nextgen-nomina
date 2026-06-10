@@ -13,7 +13,8 @@ async def get_my_slips(user=Depends(get_current_user)):
 
     user_email = user.get("email")
     if not user_email:
-        raise HTTPException(status_code=400, detail="User email not found in token")
+        # Anonymous/demo users have no email; there are simply no slips for them.
+        return []
 
     # First, find employee records associated with this email
     employee_docs = db.collection("employees").where("email", "==", user_email).stream()

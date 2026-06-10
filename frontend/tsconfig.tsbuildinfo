@@ -1,1 +1,0 @@
-{"root":["./src/App.tsx","./src/firebase.ts","./src/i18n.ts","./src/main.tsx","./src/pages/AddEmployee.tsx","./src/pages/Dashboard.tsx","./src/pages/EmployeeDashboard.tsx","./src/pages/LogEvent.tsx","./src/pages/Login.tsx","./src/pages/Onboarding.tsx"],"errors":true,"version":"5.9.3"}

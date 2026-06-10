@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
 from ..models.schemas import Employee, PayrollEvent, EventType, Region
 
 # 2024 Constants for Ecuador
@@ -43,8 +43,12 @@ class PayrollEngine:
         cls,
         employee: Employee,
         events: List[PayrollEvent],
-        current_date: datetime = datetime.now()
+        current_date: Optional[datetime] = None
     ) -> Dict:
+        # Avoid a mutable/once-evaluated default: resolve "now" on every call.
+        if current_date is None:
+            current_date = datetime.now()
+
         taxable_earnings = employee.salary
         other_earnings = 0.0
         deductions_total = 0.0
@@ -71,7 +75,11 @@ class PayrollEngine:
         region = employee.region_override or Region.SIERRA # Default fallback
         fourteenth = cls.calculate_fourteenth(region)
 
-        years_of_service = (current_date - employee.start_date).days / 365.25
+        # Normalize tz-awareness: Firestore returns tz-aware datetimes while a
+        # naive "now" may be passed in. Strip tzinfo from both before subtracting.
+        ref_date = current_date.replace(tzinfo=None) if current_date.tzinfo else current_date
+        start_date = employee.start_date.replace(tzinfo=None) if employee.start_date.tzinfo else employee.start_date
+        years_of_service = (ref_date - start_date).days / 365.25
         reserve_funds = cls.calculate_reserve_funds(taxable_earnings, years_of_service)
 
         vacations = cls.calculate_vacations(taxable_earnings)
