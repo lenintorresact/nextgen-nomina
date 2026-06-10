@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Container, Typography, Card, CardContent, Button, List, ListItem, ListItemText,
-  Divider, Box, Stack, ListItemButton, Chip, CircularProgress
+  Container, Typography, Card, CardContent, Button, List, ListItem, ListItemButton,
+  ListItemText, ListItemAvatar, Avatar, Divider, Box, Stack, Chip, CircularProgress
 } from '@mui/material';
+import { keyframes } from '@mui/system';
 import AddIcon from '@mui/icons-material/Add';
 import BoltIcon from '@mui/icons-material/Bolt';
 import axios from 'axios';
@@ -10,7 +11,16 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api_config';
 
-const money = (n: number) => `$${(n ?? 0).toFixed(2)}`;
+const money = (n: number) =>
+  `$${(n ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const initials = (a: string, b: string) => `${a?.[0] ?? ''}${b?.[0] ?? ''}`.toUpperCase();
+
+const pulse = keyframes`
+  0% { box-shadow: 0 0 0 0 rgba(255,107,94,.5); }
+  70% { box-shadow: 0 0 0 9px rgba(255,107,94,0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,107,94,0); }
+`;
 
 interface EmployeePreview {
   employee_id: string;
@@ -42,6 +52,15 @@ interface Preview {
   };
 }
 
+const Stat: React.FC<{ value: string; caption: string; primary?: boolean }> = ({ value, caption, primary }) => (
+  <Box>
+    <Typography sx={{ fontWeight: 800, fontSize: { xs: 28, sm: 34 }, lineHeight: 1.05, color: primary ? 'primary.dark' : 'text.primary' }}>
+      {value}
+    </Typography>
+    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, mt: 0.5 }}>{caption}</Typography>
+  </Box>
+);
+
 const Dashboard: React.FC = () => {
   const { getToken } = useAuth();
   const navigate = useNavigate();
@@ -54,19 +73,14 @@ const Dashboard: React.FC = () => {
       try {
         const token = await getToken();
         const headers = { Authorization: `Bearer ${token}` };
-
         const compRes = await axios.get(`${API_URL}/companies/`, { headers });
-        if (compRes.data.length === 0) {
-          navigate('/onboarding');
-          return;
-        }
+        if (compRes.data.length === 0) { navigate('/onboarding'); return; }
         const comp = compRes.data[0];
         setCompany(comp);
-
         const prevRes = await axios.get(`${API_URL}/payroll/preview/${comp.id}`, { headers });
         setPreview(prevRes.data);
       } catch (error) {
-        console.error("Dashboard data load failed", error);
+        console.error('Dashboard data load failed', error);
       } finally {
         setLoading(false);
       }
@@ -75,7 +89,7 @@ const Dashboard: React.FC = () => {
   }, [getToken, navigate]);
 
   if (loading) {
-    return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}><CircularProgress /></Box>;
+    return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}><CircularProgress /></Box>;
   }
 
   const totals = preview?.totals;
@@ -85,62 +99,60 @@ const Dashboard: React.FC = () => {
 
   return (
     <Container sx={{ mt: 4, mb: 6 }}>
-      <Typography variant="h4" gutterBottom>
-        {company ? company.name : 'Mi Empresa'}
-      </Typography>
+      <Typography variant="h4" gutterBottom>{company ? company.name : 'Mi Empresa'}</Typography>
 
-      {/* Tarjeta de cálculo en vivo: el corazón de la demo */}
-      <Card sx={{ mb: 3, bgcolor: 'primary.main', color: 'primary.contrastText' }}>
-        <CardContent>
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-            <BoltIcon fontSize="small" />
-            <Typography variant="overline">Nómina calculada en vivo · {preview?.period}</Typography>
+      {/* Hero: cálculo en vivo */}
+      <Card sx={{ mb: 3, borderLeft: '7px solid', borderColor: 'primary.main', overflow: 'hidden' }}>
+        <CardContent sx={{ p: { xs: 2.5, sm: 3.5 } }}>
+          <Stack direction="row" alignItems="center" spacing={1.2} sx={{ mb: 2 }}>
+            <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: 'secondary.main', animation: `${pulse} 1.6s infinite` }} />
+            <Typography variant="overline" sx={{ color: 'primary.dark' }}>
+              Nómina calculada en vivo · {preview?.period}
+            </Typography>
+            <BoltIcon sx={{ fontSize: 16, color: 'primary.main' }} />
           </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} sx={{ mt: 1 }}>
-            <Box>
-              <Typography variant="h4">{money(totals?.net_salary ?? 0)}</Typography>
-              <Typography variant="body2">Líquido a pagar</Typography>
-            </Box>
-            <Box>
-              <Typography variant="h5">{money(totals?.iess_employer ?? 0)}</Typography>
-              <Typography variant="body2">Aporte patronal IESS</Typography>
-            </Box>
-            <Box>
-              <Typography variant="h5">{money(provisions)}</Typography>
-              <Typography variant="body2">Provisiones (13º, 14º, fondos, vac.)</Typography>
-            </Box>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 2, sm: 5 }}>
+            <Stat primary value={money(totals?.net_salary ?? 0)} caption="Líquido a pagar" />
+            <Stat value={money(totals?.iess_employer ?? 0)} caption="Aporte patronal IESS" />
+            <Stat value={money(provisions)} caption="Provisiones (13º, 14º, fondos, vac.)" />
           </Stack>
         </CardContent>
       </Card>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems="flex-start">
         <Card sx={{ flex: 2, width: '100%' }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+          <CardContent sx={{ p: 0 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2.5, pb: 1.5 }}>
               <Typography variant="h6">Empleados ({preview?.employee_count ?? 0})</Typography>
-              <Button startIcon={<AddIcon />} variant="outlined" onClick={() => navigate('/add-employee')}>
+              <Button startIcon={<AddIcon />} onClick={() => navigate('/add-employee')}
+                sx={{ bgcolor: '#DFF4EF', color: 'primary.dark', '&:hover': { bgcolor: '#CFEEE7' } }}>
                 Añadir
               </Button>
             </Box>
-            <List>
-              {preview?.employees.map((emp) => (
+            <List disablePadding>
+              {preview?.employees.map((emp, i) => (
                 <React.Fragment key={emp.employee_id}>
+                  {i > 0 && <Divider component="li" />}
                   <ListItem
                     disablePadding
                     secondaryAction={
-                      <Chip label={money(emp.net_salary)} color="primary" variant="outlined" />
+                      <Chip label={money(emp.net_salary)} variant="outlined" color="primary"
+                        sx={{ borderWidth: 2, bgcolor: '#fff' }} />
                     }
                   >
-                    <ListItemButton
-                      onClick={() => navigate(`/employee/${emp.employee_id}`, { state: { employee: emp, company } })}
-                    >
+                    <ListItemButton sx={{ py: 1.5, px: 2.5 }}
+                      onClick={() => navigate(`/employee/${emp.employee_id}`, { state: { employee: emp, company } })}>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: '#DFF4EF', color: 'primary.dark', fontWeight: 800 }}>
+                          {initials(emp.first_name, emp.last_name)}
+                        </Avatar>
+                      </ListItemAvatar>
                       <ListItemText
-                        primary={`${emp.first_name} ${emp.last_name}`}
-                        secondary={`Sueldo base: ${money(emp.base_salary)}`}
+                        primary={<Typography sx={{ fontWeight: 700 }}>{emp.first_name} {emp.last_name}</Typography>}
+                        secondary={`Sueldo base ${money(emp.base_salary)}`}
                       />
                     </ListItemButton>
                   </ListItem>
-                  <Divider />
                 </React.Fragment>
               ))}
             </List>
@@ -148,16 +160,17 @@ const Dashboard: React.FC = () => {
         </Card>
 
         <Card sx={{ flex: 1, width: '100%' }}>
-          <CardContent>
+          <CardContent sx={{ p: 2.5 }}>
             <Typography variant="h6" gutterBottom>Acciones</Typography>
             <Button fullWidth variant="contained" sx={{ mt: 1 }} onClick={() => navigate('/log-event')}>
               Registrar Novedad
             </Button>
-            <Button fullWidth variant="outlined" color="warning" sx={{ mt: 2 }} onClick={() => navigate('/close-period')}>
+            <Button fullWidth variant="outlined" color="inherit" sx={{ mt: 1.5, color: 'text.primary' }}
+              onClick={() => navigate('/close-period')}>
               Cerrar Mes
             </Button>
-            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 2 }}>
-              Registra una novedad y vuelve aquí: el total se recalcula al instante, sin cerrar el mes.
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2, fontWeight: 600 }}>
+              Registra una novedad y el total se recalcula al instante, sin cerrar el mes.
             </Typography>
           </CardContent>
         </Card>

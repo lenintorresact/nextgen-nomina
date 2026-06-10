@@ -45,7 +45,16 @@ const Login: React.FC = () => {
   return (
     <Container maxWidth="sm">
       <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Paper elevation={3} sx={{ p: 4, width: '100%', textAlign: 'center' }}>
+        <Paper elevation={0} sx={{ p: 4, width: '100%', textAlign: 'center', boxShadow: '0 14px 34px rgba(20,60,52,.10)' }}>
+          <Box
+            sx={{
+              width: 56, height: 56, borderRadius: '50%', mx: 'auto', mb: 2,
+              background: 'linear-gradient(135deg, #16B69E, #39D6BB)',
+              display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 26,
+            }}
+          >
+            N
+          </Box>
           <Typography variant="h4" gutterBottom>
             Nómina Ecuador
           </Typography>
