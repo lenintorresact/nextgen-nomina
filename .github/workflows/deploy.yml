@@ -1,8 +1,16 @@
-name: Deploy to Cloud Run
+name: Deploy Backend to Cloud Run
 
+# Trunk-based: master is the single source of truth.
+# The FRONTEND is deployed automatically by Firebase App Hosting (connected to the
+# master branch), so this workflow only deploys the backend to Cloud Run.
+# Requires repo secrets: GCP_PROJECT_ID, GCP_SA_KEY (service-account JSON key with
+# Cloud Run + Artifact Registry + Cloud Build access).
 on:
   push:
-    branches: [ main, payroll-system-ecuador-final-v3 ] # Trigger on main or final release branch
+    branches: [ master ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy.yml'
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -24,7 +32,7 @@ jobs:
         uses: 'google-github-actions/setup-gcloud@v1'
 
       - name: 'Artifact Registry Auth'
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build and Push Backend
         run: |
@@ -32,53 +40,11 @@ jobs:
           docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/payroll/backend:${{ github.sha }}
 
       - name: Deploy Backend to Cloud Run
-        id: deploy-backend
         uses: 'google-github-actions/deploy-cloudrun@v1'
         with:
           service: 'payroll-backend'
           image: 'us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/payroll/backend:${{ github.sha }}'
           region: '${{ env.REGION }}'
+          flags: '--allow-unauthenticated'
           env_vars: |
             GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }}
-
-    outputs:
-      backend_url: ${{ steps.deploy-backend.outputs.url }}
-
-  deploy-frontend:
-    needs: deploy-backend
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Google Auth
-        uses: 'google-github-actions/auth@v1'
-        with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
-
-      - name: 'Set up Cloud SDK'
-        uses: 'google-github-actions/setup-gcloud@v1'
-
-      - name: 'Artifact Registry Auth'
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev
-
-      - name: Build and Push Frontend
-        run: |
-          docker build \
-            --build-arg VITE_API_URL=${{ needs.deploy-backend.outputs.backend_url }} \
-            --build-arg VITE_FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }} \
-            --build-arg VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.FIREBASE_AUTH_DOMAIN }} \
-            --build-arg VITE_FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }} \
-            --build-arg VITE_FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }} \
-            --build-arg VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.FIREBASE_MESSAGING_SENDER_ID }} \
-            --build-arg VITE_FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }} \
-            -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/payroll/frontend:${{ github.sha }} \
-            ./frontend
-          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/payroll/frontend:${{ github.sha }}
-
-      - name: Deploy Frontend to Cloud Run
-        uses: 'google-github-actions/deploy-cloudrun@v1'
-        with:
-          service: 'payroll-frontend'
-          image: 'us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/payroll/frontend:${{ github.sha }}'
-          region: '${{ env.REGION }}'
