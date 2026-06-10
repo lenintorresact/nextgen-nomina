@@ -13,9 +13,11 @@ const AddEmployee: React.FC = () => {
     first_name: '',
     last_name: '',
     email: '',
-    salary: 460,
+    salary: 482,
     start_date: new Date().toISOString().split('T')[0],
     contract_type: 'Indefinido',
+    projected_personal_expenses: 0,
+    family_burdens: 0,
     company_id: ''
   });
 
@@ -53,6 +55,8 @@ const AddEmployee: React.FC = () => {
           <TextField fullWidth label="Email" margin="normal" value={employee.email} onChange={e => setEmployee({...employee, email: e.target.value})} required />
           <TextField fullWidth label="Salario" margin="normal" type="number" value={employee.salary} onChange={e => setEmployee({...employee, salary: parseFloat(e.target.value)})} required />
           <TextField fullWidth label="Fecha de Inicio" margin="normal" type="date" value={employee.start_date} onChange={e => setEmployee({...employee, start_date: e.target.value})} required />
+          <TextField fullWidth label="Gastos Personales Proyectados (anual)" margin="normal" type="number" helperText="Para la rebaja del Impuesto a la Renta" value={employee.projected_personal_expenses} onChange={e => setEmployee({...employee, projected_personal_expenses: parseFloat(e.target.value) || 0})} />
+          <TextField fullWidth label="Cargas Familiares" margin="normal" type="number" value={employee.family_burdens} onChange={e => setEmployee({...employee, family_burdens: parseInt(e.target.value) || 0})} />
 
           <Button type="submit" fullWidth variant="contained" sx={{ mt: 3 }}>
             Guardar Empleado

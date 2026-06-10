@@ -36,6 +36,9 @@ class Employee(BaseModel):
     accumulate_13th: bool = True
     accumulate_14th: bool = True
     accumulate_reserve_funds: bool = True
+    # Datos para la retención del Impuesto a la Renta (proyección anual).
+    projected_personal_expenses: float = 0.0  # Gastos personales proyectados (anuales)
+    family_burdens: int = 0                    # Nº de cargas familiares
 
 class EventType(str, Enum):
     OVERTIME_50 = "Overtime 50%"
@@ -65,6 +68,7 @@ class PayrollSlip(BaseModel):
     net_salary: float
     iess_employee: float
     iess_employer: float
+    income_tax: float = 0.0  # Retención mensual del Impuesto a la Renta
     thirteenth_salary: float
     fourteenth_salary: float
     reserve_funds: float

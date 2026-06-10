@@ -65,6 +65,7 @@ async def preview_payroll(company_id: str, period: str = None, user=Depends(get_
         "net_salary": 0.0,
         "iess_employee": 0.0,
         "iess_employer": 0.0,
+        "income_tax": 0.0,
         "thirteenth_salary": 0.0,
         "fourteenth_salary": 0.0,
         "reserve_funds": 0.0,
@@ -77,7 +78,9 @@ async def preview_payroll(company_id: str, period: str = None, user=Depends(get_
         employee = Employee(**emp_data)
 
         period_events = _employee_events_for_period(employee.id, period)
-        calc = PayrollEngine.process_monthly_payroll(employee, period_events, current_date=now_ec)
+        calc = PayrollEngine.process_monthly_payroll(
+            employee, period_events, current_date=now_ec, period=period
+        )
 
         employees_preview.append({
             "employee_id": employee.id,
@@ -115,7 +118,7 @@ async def close_period(company_id: str, period: str, user=Depends(get_current_us
         period_events = _employee_events_for_period(employee.id, period)
 
         calculation = PayrollEngine.process_monthly_payroll(
-            employee, period_events, current_date=datetime.now(EC_TZ)
+            employee, period_events, current_date=datetime.now(EC_TZ), period=period
         )
 
         slip_data = {
@@ -128,6 +131,7 @@ async def close_period(company_id: str, period: str, user=Depends(get_current_us
             "net_salary": calculation["net_salary"],
             "iess_employee": calculation["iess_employee"],
             "iess_employer": calculation["iess_employer"],
+            "income_tax": calculation["income_tax"],
             "thirteenth_salary": calculation["thirteenth_salary"],
             "fourteenth_salary": calculation["fourteenth_salary"],
             "reserve_funds": calculation["reserve_funds"],

@@ -23,6 +23,9 @@
     "iess": "IESS Personal",
     "thirteenth": "Décimo Tercero",
     "fourteenth": "Décimo Cuarto",
-    "reserve_funds": "Fondos de Reserva"
+    "reserve_funds": "Fondos de Reserva",
+    "income_tax": "Impuesto a la Renta",
+    "personal_expenses": "Gastos Personales Proyectados (anual)",
+    "family_burdens": "Cargas Familiares"
   }
 }
