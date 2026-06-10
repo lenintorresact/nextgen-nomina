@@ -3,8 +3,9 @@ name: Deploy Backend to Cloud Run
 # Trunk-based: master is the single source of truth.
 # The FRONTEND is deployed automatically by Firebase App Hosting (connected to the
 # master branch), so this workflow only deploys the backend to Cloud Run.
-# Requires repo secrets: GCP_PROJECT_ID, GCP_SA_KEY (service-account JSON key with
-# Cloud Run + Artifact Registry + Cloud Build access).
+#
+# Auth is keyless via Workload Identity Federation (no service-account key stored in
+# GitHub). The values below are non-secret resource identifiers.
 on:
   push:
     branches: [ master ]
@@ -12,38 +13,47 @@ on:
       - 'backend/**'
       - '.github/workflows/deploy.yml'
 
+permissions:
+  contents: read
+  id-token: write   # required for the GitHub OIDC token used by WIF
+
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  PROJECT_ID: easy-nom-stage
   REGION: us-central1
+  IMAGE: us-central1-docker.pkg.dev/easy-nom-stage/payroll/backend
+  WIF_PROVIDER: projects/567103925732/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  SERVICE_ACCOUNT: payroll-deployer@easy-nom-stage.iam.gserviceaccount.com
 
 jobs:
   deploy-backend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Google Auth
-        uses: 'google-github-actions/auth@v1'
+      - name: Google Auth (Workload Identity Federation)
+        uses: 'google-github-actions/auth@v2'
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.SERVICE_ACCOUNT }}'
 
-      - name: 'Set up Cloud SDK'
-        uses: 'google-github-actions/setup-gcloud@v1'
+      - name: Set up Cloud SDK
+        uses: 'google-github-actions/setup-gcloud@v2'
 
-      - name: 'Artifact Registry Auth'
+      - name: Artifact Registry Auth
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build and Push Backend
         run: |
-          docker build -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/payroll/backend:${{ github.sha }} ./backend
-          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/payroll/backend:${{ github.sha }}
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" ./backend
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
 
       - name: Deploy Backend to Cloud Run
-        uses: 'google-github-actions/deploy-cloudrun@v1'
+        uses: 'google-github-actions/deploy-cloudrun@v2'
         with:
           service: 'payroll-backend'
-          image: 'us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/payroll/backend:${{ github.sha }}'
+          image: '${{ env.IMAGE }}:${{ github.sha }}'
           region: '${{ env.REGION }}'
           flags: '--allow-unauthenticated'
           env_vars: |
