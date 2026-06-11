@@ -148,6 +148,19 @@ def test_personal_expenses_rebate_reduces_withholding():
     with_rebate = PayrollEngine.calculate_ir_withholding(3000.0, C2026, gastos=5000.0, cargas=0)
     assert with_rebate < without
 
+def test_personal_expenses_rebate_scale_by_cargas():
+    # Tope confirmado (LRTI): 0→7, 1→9, 2→11, 3→14, 4→17, 5+→20 canastas; tasa 18%.
+    canasta = C2026.canasta_basica
+    for cargas, n in [(0, 7), (1, 9), (2, 11), (3, 14), (4, 17), (5, 20), (8, 20)]:
+        # Gastos enormes para que el tope (N canastas) sea el límite.
+        rebate = PayrollEngine.calculate_personal_expenses_rebate(1_000_000.0, cargas, C2026)
+        assert rebate == pytest.approx(0.18 * n * canasta)
+
+def test_personal_expenses_rebate_catastrophic_uses_100_canastas():
+    rebate = PayrollEngine.calculate_personal_expenses_rebate(
+        1_000_000.0, 0, C2026, catastrophic=True)
+    assert rebate == pytest.approx(0.18 * 100 * C2026.canasta_basica)
+
 def test_ir_withholding_applied_in_monthly_payroll():
     employee = _employee(salary=3000.0)
     result = PayrollEngine.process_monthly_payroll(employee, [], period="2026-06")

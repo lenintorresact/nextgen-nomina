@@ -318,7 +318,8 @@ def _annual_form107_data(employee: Employee, year: int, constants) -> tuple:
     base_imponible = max(0.0, ingresos_gravados - aporte_iess)
     impuesto_bruto = PayrollEngine.calculate_ir_tax(base_imponible, constants)
     rebaja = PayrollEngine.calculate_personal_expenses_rebate(
-        employee.projected_personal_expenses, employee.family_burdens, constants)
+        employee.projected_personal_expenses, employee.family_burdens, constants,
+        employee.catastrophic_illness_burden)
     impuesto_neto = max(0.0, impuesto_bruto - rebaja)
 
     data = {

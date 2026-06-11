@@ -39,6 +39,8 @@ class Employee(BaseModel):
     # Datos para la retención del Impuesto a la Renta (proyección anual).
     projected_personal_expenses: float = 0.0  # Gastos personales proyectados (anuales)
     family_burdens: int = 0                    # Nº de cargas familiares
+    # Carga con enfermedad catastrófica/rara/huérfana → tope de 100 canastas.
+    catastrophic_illness_burden: bool = False
 
 class EventType(str, Enum):
     OVERTIME_50 = "Overtime 50%"

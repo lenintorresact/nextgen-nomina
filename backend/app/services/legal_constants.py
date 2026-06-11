@@ -29,6 +29,9 @@ class LegalYear:
     gastos_rebate_rate: float                   # % de rebaja sobre gastos personales
     # Nº de canastas básicas tope para la rebaja, según nº de cargas familiares.
     canastas_by_cargas: Dict[int, int] = field(default_factory=dict)
+    # Tope especial: cargas con enfermedad catastrófica/rara/huérfana → 100 canastas
+    # (LRTI, innumerado tras Art. 10; Resolución NAC-DGERCGC23-00000020).
+    canastas_catastrophic: int = 100
     # Desglose del aporte patronal total (suma = iess_employer). Para la planilla IESS.
     iess_employer_iess: float = 0.1115          # Aporte patronal IESS puro (11.15%)
     iece_rate: float = 0.005                    # IECE 0.5%
@@ -56,8 +59,11 @@ _IR_BRACKETS_2026: List[IRBracket] = [
     (109_956.0, float("inf"), 24_572.0, 0.37),
 ]
 
-# Tope de canastas básicas para la rebaja de gastos personales, por cargas.
-# 0 cargas → 7 canastas; con cargas escala entre 9 y 20 (LRTI / Resolución SRI).
+# Tope de canastas básicas para la rebaja de gastos personales, por nº de cargas.
+# CONFIRMADO contra la LRTI (innumerado tras Art. 10, reforma Ley de Fortalecimiento
+# de la Economía Familiar 2023) y la Resolución SRI NAC-DGERCGC23-00000020:
+# 0→7, 1→9, 2→11, 3→14, 4→17, 5+→20. Rebaja = 18% del menor entre gastos y N canastas.
+# No hay tramo por nivel de ingreso (la reforma 2023 lo eliminó).
 _CANASTAS_BY_CARGAS = {0: 7, 1: 9, 2: 11, 3: 14, 4: 17, 5: 20}
 
 LEGAL_CONSTANTS: Dict[int, LegalYear] = {

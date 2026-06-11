@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Container, Typography, TextField, Button, Box } from '@mui/material';
+import { Container, Typography, TextField, Button, Box, FormControlLabel, Checkbox } from '@mui/material';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +18,7 @@ const AddEmployee: React.FC = () => {
     contract_type: 'Indefinido',
     projected_personal_expenses: 0,
     family_burdens: 0,
+    catastrophic_illness_burden: false,
     company_id: ''
   });
 
@@ -57,6 +58,10 @@ const AddEmployee: React.FC = () => {
           <TextField fullWidth label="Fecha de Inicio" margin="normal" type="date" value={employee.start_date} onChange={e => setEmployee({...employee, start_date: e.target.value})} required />
           <TextField fullWidth label="Gastos Personales Proyectados (anual)" margin="normal" type="number" helperText="Para la rebaja del Impuesto a la Renta" value={employee.projected_personal_expenses} onChange={e => setEmployee({...employee, projected_personal_expenses: parseFloat(e.target.value) || 0})} />
           <TextField fullWidth label="Cargas Familiares" margin="normal" type="number" value={employee.family_burdens} onChange={e => setEmployee({...employee, family_burdens: parseInt(e.target.value) || 0})} />
+          <FormControlLabel
+            control={<Checkbox checked={employee.catastrophic_illness_burden} onChange={e => setEmployee({...employee, catastrophic_illness_burden: e.target.checked})} />}
+            label="Carga con enfermedad catastrófica/rara/huérfana (tope 100 canastas)"
+          />
 
           <Button type="submit" fullWidth variant="contained" sx={{ mt: 3 }}>
             Guardar Empleado

@@ -138,17 +138,25 @@ class PayrollEngine:
 
     @staticmethod
     def calculate_personal_expenses_rebate(gastos: float, cargas: int,
-                                           constants: LegalYear) -> float:
+                                           constants: LegalYear,
+                                           catastrophic: bool = False) -> float:
         """Rebaja por gastos personales: % sobre el menor entre los gastos
-        declarados y el tope de N canastas básicas (según cargas familiares)."""
+        declarados y el tope de N canastas básicas (según cargas familiares).
+
+        Si `catastrophic` (carga con enfermedad catastrófica/rara/huérfana), el
+        tope es de 100 canastas en lugar de la escala por nº de cargas.
+        """
         if gastos <= 0:
             return 0.0
-        tope = constants.canastas_for_cargas(cargas) * constants.canasta_basica
+        canastas = constants.canastas_catastrophic if catastrophic \
+            else constants.canastas_for_cargas(cargas)
+        tope = canastas * constants.canasta_basica
         return constants.gastos_rebate_rate * min(gastos, tope)
 
     @classmethod
     def calculate_ir_withholding(cls, monthly_taxable: float, constants: LegalYear,
-                                 gastos: float = 0.0, cargas: int = 0) -> float:
+                                 gastos: float = 0.0, cargas: int = 0,
+                                 catastrophic: bool = False) -> float:
         """Retención mensual del IR por el método de proyección anual.
 
         Proyecta el ingreso gravable anual (sueldo mensual x 12), descuenta el
@@ -160,7 +168,7 @@ class PayrollEngine:
         annual_iess = annual_taxable * constants.iess_employee
         base_imponible = annual_taxable - annual_iess
         annual_tax = cls.calculate_ir_tax(base_imponible, constants)
-        rebate = cls.calculate_personal_expenses_rebate(gastos, cargas, constants)
+        rebate = cls.calculate_personal_expenses_rebate(gastos, cargas, constants, catastrophic)
         annual_tax = max(0.0, annual_tax - rebate)
         return annual_tax / 12
 
@@ -230,6 +238,7 @@ class PayrollEngine:
             taxable_earnings, constants,
             gastos=employee.projected_personal_expenses,
             cargas=employee.family_burdens,
+            catastrophic=employee.catastrophic_illness_burden,
         )
         if income_tax > 0:
             deductions_breakdown["Impuesto a la Renta"] = income_tax
