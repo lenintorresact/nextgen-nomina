@@ -47,6 +47,27 @@ class EventType(str, Enum):
     BONUS = "Bonus"
     DEDUCTION = "Deduction"
     SALARY_CHANGE = "Salary Change"
+    # Horas extras calculadas a partir de horas (amount = nº de horas):
+    HORAS_SUPLEMENTARIAS = "Horas Suplementarias (50%)"   # recargo 50%, hasta 24:00
+    HORAS_EXTRAORDINARIAS = "Horas Extraordinarias (100%)"  # recargo 100%, noche/fines/feriados
+    # Descuentos estructurados:
+    PRESTAMO_QUIROGRAFARIO = "Préstamo Quirografario IESS"
+    PRESTAMO_HIPOTECARIO = "Préstamo Hipotecario (Biess)"
+    ANTICIPO = "Anticipo de Sueldo"
+    MULTA = "Multa"                  # tope 10% de la remuneración (Art. 44 CT)
+    FALTA = "Falta / Atraso"         # amount = nº de horas no trabajadas
+
+
+class SettlementCause(str, Enum):
+    """Causa de terminación que define la indemnización en la liquidación."""
+    # Despido injustificado: indemnización Art. 188 + bonificación 25% Art. 185.
+    DESPIDO_INTEMPESTIVO = "Despido Intempestivo"
+    # Desahucio (empleador o trabajador, con aviso): solo bonificación 25% Art. 185
+    # sobre años COMPLETOS (las fracciones no cuentan para este rubro).
+    DESAHUCIO_EMPLEADOR = "Desahucio por el Empleador"
+    DESAHUCIO_TRABAJADOR = "Desahucio por el Trabajador"
+    # Renuncia voluntaria (Art. 180): solo proporcionales, sin indemnización.
+    RENUNCIA = "Renuncia Voluntaria"
 
 class PayrollEvent(BaseModel):
     id: Optional[str] = None

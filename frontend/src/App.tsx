@@ -11,6 +11,7 @@ import LogEvent from './pages/LogEvent';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import ClosePeriod from './pages/ClosePeriod';
 import EmployeeDetail from './pages/EmployeeDetail';
+import Settlement from './pages/Settlement';
 import './i18n';
 
 // "Menta fresca" — warm, approachable SMB fintech: mint + cream, rounded Nunito,
@@ -79,6 +80,7 @@ function App() {
             <Route path="/employee/:id" element={<EmployeeDetail />} />
             <Route path="/log-event" element={<LogEvent />} />
             <Route path="/close-period" element={<ClosePeriod />} />
+            <Route path="/settlement" element={<Settlement />} />
             <Route path="/employee-dashboard" element={<EmployeeDashboard />} />
           </Routes>
         </Router>

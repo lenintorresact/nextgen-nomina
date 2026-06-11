@@ -73,22 +73,35 @@ const LogEvent: React.FC = () => {
             value={event.type}
             onChange={(e) => setEvent({ ...event, type: e.target.value })}
           >
-            <MenuItem value="Overtime 50%">Horas Extras 50%</MenuItem>
-            <MenuItem value="Overtime 100%">Horas Extras 100%</MenuItem>
+            <MenuItem value="Horas Suplementarias (50%)">Horas Suplementarias (50%)</MenuItem>
+            <MenuItem value="Horas Extraordinarias (100%)">Horas Extraordinarias (100%)</MenuItem>
+            <MenuItem value="Overtime 50%">Horas Extras 50% (monto)</MenuItem>
+            <MenuItem value="Overtime 100%">Horas Extras 100% (monto)</MenuItem>
             <MenuItem value="Commission">Comisión</MenuItem>
             <MenuItem value="Bonus">Bono</MenuItem>
-            <MenuItem value="Deduction">Descuento</MenuItem>
+            <MenuItem value="Préstamo Quirografario IESS">Préstamo Quirografario IESS</MenuItem>
+            <MenuItem value="Préstamo Hipotecario (Biess)">Préstamo Hipotecario (Biess)</MenuItem>
+            <MenuItem value="Anticipo de Sueldo">Anticipo de Sueldo</MenuItem>
+            <MenuItem value="Multa">Multa (tope 10%)</MenuItem>
+            <MenuItem value="Falta / Atraso">Falta / Atraso</MenuItem>
+            <MenuItem value="Deduction">Otro Descuento</MenuItem>
           </TextField>
 
-          <TextField
-            fullWidth
-            label="Monto ($)"
-            type="number"
-            margin="normal"
-            value={event.amount}
-            onChange={(e) => setEvent({ ...event, amount: parseFloat(e.target.value) })}
-            required
-          />
+          {(() => {
+            const hourBased = ['Horas Suplementarias (50%)', 'Horas Extraordinarias (100%)', 'Falta / Atraso'];
+            const isHours = hourBased.includes(event.type);
+            return (
+              <TextField
+                fullWidth
+                label={isHours ? 'Nº de Horas' : 'Monto ($)'}
+                type="number"
+                margin="normal"
+                value={event.amount}
+                onChange={(e) => setEvent({ ...event, amount: parseFloat(e.target.value) })}
+                required
+              />
+            );
+          })()}
 
           <TextField
             fullWidth

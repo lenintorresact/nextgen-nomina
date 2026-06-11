@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
-from ..models.schemas import PayrollEvent, PayrollSlip, Employee
+from ..models.schemas import PayrollEvent, PayrollSlip, Employee, SettlementCause
 from ..core.config import db, get_current_user
 from ..services.payroll_engine import PayrollEngine
 from datetime import datetime
@@ -145,3 +145,44 @@ async def close_period(company_id: str, period: str, user=Depends(get_current_us
         slips.append(PayrollSlip(**slip_data))
 
     return slips
+
+
+@router.get("/settlement/{employee_id}")
+async def settlement(
+    employee_id: str,
+    termination_date: str,
+    cause: SettlementCause,
+    remuneration: float | None = None,
+    pending_vacation_days: float = 0.0,
+    pending_reserve_funds: float = 0.0,
+    unpaid_amounts: float = 0.0,
+    user=Depends(get_current_user),
+):
+    """Liquidación de haberes (finiquito) para un empleado.
+
+    `termination_date` en formato YYYY-MM-DD. No persiste: es un cálculo en vivo
+    como el preview mensual.
+    """
+    emp_doc = db.collection("employees").document(employee_id).get()
+    if not emp_doc.exists:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    emp_data = emp_doc.to_dict()
+    emp_data["id"] = emp_doc.id
+    # Verifica que el usuario sea dueño de la empresa del empleado.
+    _verify_company_ownership(emp_data["company_id"], user)
+    employee = Employee(**emp_data)
+
+    try:
+        term = datetime.strptime(termination_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="termination_date must be YYYY-MM-DD")
+
+    return PayrollEngine.calculate_settlement(
+        employee,
+        term,
+        cause,
+        remuneration=remuneration,
+        pending_vacation_days=pending_vacation_days,
+        pending_reserve_funds=pending_reserve_funds,
+        unpaid_amounts=unpaid_amounts,
+    )

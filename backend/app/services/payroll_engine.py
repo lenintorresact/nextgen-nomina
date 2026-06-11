@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Dict, Optional
-from ..models.schemas import Employee, PayrollEvent, EventType, Region
+from ..models.schemas import Employee, PayrollEvent, EventType, Region, SettlementCause
 from . import legal_constants
 from .legal_constants import LegalYear
 
@@ -12,6 +12,78 @@ FOURTEENTH_PAYOUT_MONTH = {
     Region.SIERRA: 8,
     Region.AMAZONIA: 8,
 }
+
+# Mes de inicio del ciclo de acumulación del décimo cuarto, por región.
+FOURTEENTH_CYCLE_START_MONTH = {
+    Region.COSTA: 3,
+    Region.INSULAR: 3,
+    Region.SIERRA: 8,
+    Region.AMAZONIA: 8,
+}
+
+# Divisor para el valor de la hora (8 h x 30 días) y recargos de horas extras.
+HOURLY_DIVISOR = 240
+SUPPLEMENTARY_SURCHARGE = 1.5   # horas suplementarias: +50%
+EXTRAORDINARY_SURCHARGE = 2.0   # horas extraordinarias: +100%
+
+# Tope de la multa disciplinaria: 10% de la remuneración (Art. 44 Código del Trabajo).
+MULTA_CAP_RATE = 0.10
+
+# Tipos de novedad que constituyen ingresos gravables a monto fijo.
+_FLAT_EARNING_TYPES = (
+    EventType.OVERTIME_50, EventType.OVERTIME_100,
+    EventType.COMMISSION, EventType.BONUS,
+)
+# Descuentos a monto fijo (se categorizan por su etiqueta).
+_FLAT_DEDUCTION_TYPES = (
+    EventType.DEDUCTION, EventType.PRESTAMO_QUIROGRAFARIO,
+    EventType.PRESTAMO_HIPOTECARIO, EventType.ANTICIPO,
+)
+
+
+def _value_per_hour(salary: float) -> float:
+    """Valor de la hora ordinaria: sueldo mensual / 240."""
+    return salary / HOURLY_DIVISOR
+
+
+def _as_date(value) -> date:
+    """Normaliza datetime/date (tz-aware o naive) a un date puro."""
+    if isinstance(value, datetime):
+        return value.date()
+    return value
+
+
+def _thirteenth_cycle_start(t: date) -> date:
+    """Inicio del ciclo del décimo tercero (1 de diciembre) vigente a la fecha t."""
+    year = t.year if t.month == 12 else t.year - 1
+    return date(year, 12, 1)
+
+
+def _fourteenth_cycle_start(t: date, region: Region) -> date:
+    """Inicio del ciclo del décimo cuarto a la fecha t, según región."""
+    start_month = FOURTEENTH_CYCLE_START_MONTH.get(region, 8)
+    year = t.year if t.month >= start_month else t.year - 1
+    return date(year, start_month, 1)
+
+
+def _last_anniversary(start: date, t: date) -> date:
+    """Último aniversario de la fecha de ingreso en o antes de t."""
+    try:
+        this_year = start.replace(year=t.year)
+    except ValueError:  # 29-feb en año no bisiesto
+        this_year = start.replace(year=t.year, day=28)
+    if this_year <= t:
+        return this_year
+    try:
+        return start.replace(year=t.year - 1)
+    except ValueError:
+        return start.replace(year=t.year - 1, day=28)
+
+
+def _prorated_days(cycle_start: date, hire: date, termination: date) -> int:
+    """Días acumulados en un ciclo: desde max(inicio de ciclo, ingreso) hasta la salida."""
+    effective_start = max(cycle_start, hire)
+    return max(0, (termination - effective_start).days)
 
 
 class PayrollEngine:
@@ -113,17 +185,40 @@ class PayrollEngine:
 
         taxable_earnings = employee.salary
         deductions_total = 0.0
+        valor_hora = _value_per_hour(employee.salary)
 
         earnings_breakdown = {"base_salary": employee.salary}
         deductions_breakdown = {}
 
         for event in events:
-            if event.type in [EventType.OVERTIME_50, EventType.OVERTIME_100, EventType.COMMISSION, EventType.BONUS]:
+            if event.type in _FLAT_EARNING_TYPES:
+                # Ingreso gravable a monto fijo.
                 taxable_earnings += event.amount
                 earnings_breakdown[event.type.value] = event.amount
-            elif event.type == EventType.DEDUCTION:
+            elif event.type == EventType.HORAS_SUPLEMENTARIAS:
+                # amount = nº de horas; el monto se calcula con recargo del 50%.
+                pago = event.amount * valor_hora * SUPPLEMENTARY_SURCHARGE
+                taxable_earnings += pago
+                earnings_breakdown[event.type.value] = pago
+            elif event.type == EventType.HORAS_EXTRAORDINARIAS:
+                pago = event.amount * valor_hora * EXTRAORDINARY_SURCHARGE
+                taxable_earnings += pago
+                earnings_breakdown[event.type.value] = pago
+            elif event.type == EventType.MULTA:
+                # Tope legal: la multa no puede exceder el 10% de la remuneración.
+                monto = min(event.amount, MULTA_CAP_RATE * employee.salary)
+                deductions_total += monto
+                deductions_breakdown[event.type.value] = monto
+            elif event.type == EventType.FALTA:
+                # amount = nº de horas no trabajadas; se descuenta el valor hora.
+                monto = event.amount * valor_hora
+                deductions_total += monto
+                deductions_breakdown[event.type.value] = monto
+            elif event.type in _FLAT_DEDUCTION_TYPES:
                 deductions_total += event.amount
-                deductions_breakdown[event.description] = event.amount
+                # El descuento genérico usa su descripción; los demás, su etiqueta.
+                label = event.description if event.type == EventType.DEDUCTION else event.type.value
+                deductions_breakdown[label] = event.amount
 
         # IESS
         iess_employee = cls.calculate_iess_employee(taxable_earnings, constants)
@@ -179,4 +274,101 @@ class PayrollEngine:
             "earnings_breakdown": earnings_breakdown,
             "deductions_breakdown": deductions_breakdown,
             "net_salary": net_salary,
+        }
+
+    # --- Liquidación de haberes (finiquito) ------------------------------
+
+    @classmethod
+    def calculate_settlement(
+        cls,
+        employee: Employee,
+        termination_date: datetime,
+        cause: SettlementCause,
+        remuneration: Optional[float] = None,
+        pending_vacation_days: float = 0.0,
+        pending_reserve_funds: float = 0.0,
+        unpaid_amounts: float = 0.0,
+    ) -> Dict:
+        """Calcula la liquidación de haberes al terminar la relación laboral.
+
+        Componentes: décimos proporcionales, vacaciones proporcionales (Art. 78),
+        fondos de reserva pendientes y, según la causa, la indemnización por
+        despido (Art. 188) y/o la bonificación por desahucio (Art. 185). El total
+        no descuenta aportes: es valor a recibir.
+
+        `remuneration` es la base de cálculo (sueldo + beneficios permanentes);
+        si no se pasa, se usa `employee.salary`. El décimo cuarto siempre usa el SBU.
+        """
+        term = _as_date(termination_date)
+        hire = _as_date(employee.start_date)
+        # "Remuneración" = sueldo + beneficios permanentes. El modelo solo guarda
+        # `salary`; se permite sobrescribir con la remuneración real.
+        remuneration = remuneration if remuneration is not None else employee.salary
+        constants = legal_constants.for_year(term.year)
+        region = employee.region_override or Region.SIERRA
+
+        # Tiempo de servicio en años de CALENDARIO (no días/365.25) para evitar
+        # error de redondeo en los límites de año.
+        full_years = term.year - hire.year - (
+            1 if (term.month, term.day) < (hire.month, hire.day) else 0
+        )
+        full_years = max(0, full_years)
+        exact_years = (term.month, term.day) == (hire.month, hire.day)
+        # Art. 188: la fracción de año se considera año completo.
+        years_with_fraction = full_years if exact_years else full_years + 1
+        years_float = max(0.0, (term - hire).days / 365.25)
+
+        # Décimos proporcionales (un año completo = 1 remuneración / 1 SBU).
+        days_13 = min(360, _prorated_days(_thirteenth_cycle_start(term), hire, term))
+        thirteenth = remuneration * days_13 / 360
+        days_14 = min(360, _prorated_days(_fourteenth_cycle_start(term, region), hire, term))
+        fourteenth = constants.sbu * days_14 / 360
+
+        # Vacaciones no gozadas (Art. 71): la veinticuatroava parte de lo percibido
+        # en el año (equivale a remuneración/30 por día x 15 días/año), proporcional
+        # al tiempo trabajado; más días no gozados de años anteriores. Por defecto
+        # `remuneration`=sueldo, pero Art. 71 incluye horas extras y retribución
+        # accesoria normal (excluye 13º/14º) si se pasa la remuneración ampliada.
+        days_since_anniv = (term - _last_anniversary(hire, term)).days
+        prop_vacation_days = 15.0 * (days_since_anniv / 365)
+        total_vacation_days = prop_vacation_days + pending_vacation_days
+        vacation = (remuneration / 30) * total_vacation_days
+
+        # Indemnización / bonificación según la causa de salida.
+        indemnizacion = 0.0
+        desahucio_bonus = 0.0
+        if cause == SettlementCause.DESPIDO_INTEMPESTIVO:
+            # Art. 188: hasta 3 años → 3 meses; luego 1 mes por año (años con
+            # fracción), máx 25 meses. ADEMÁS, bonificación del 25% (Art. 185).
+            months = 3 if years_with_fraction <= 3 else min(years_with_fraction, 25)
+            indemnizacion = remuneration * months
+            desahucio_bonus = 0.25 * remuneration * full_years
+        elif cause in (SettlementCause.DESAHUCIO_EMPLEADOR,
+                       SettlementCause.DESAHUCIO_TRABAJADOR):
+            # Art. 185: 25% de la remuneración SOLO por años COMPLETOS (las
+            # fracciones de año no cuentan para este rubro).
+            desahucio_bonus = 0.25 * remuneration * full_years
+        # RENUNCIA (Art. 180): solo proporcionales, sin indemnización.
+
+        total = (
+            thirteenth + fourteenth + vacation + pending_reserve_funds
+            + indemnizacion + desahucio_bonus + unpaid_amounts
+        )
+
+        return {
+            "employee_id": employee.id,
+            "termination_date": term.isoformat(),
+            "cause": cause.value,
+            "years_of_service": round(years_float, 2),
+            "full_years": full_years,
+            "years_with_fraction": years_with_fraction,
+            "thirteenth_proportional": thirteenth,
+            "fourteenth_proportional": fourteenth,
+            "vacation_pending_days": round(total_vacation_days, 2),
+            "vacation_pending": vacation,
+            "reserve_funds_pending": pending_reserve_funds,
+            "severance_indemnity": indemnizacion,
+            "desahucio_bonus": desahucio_bonus,
+            "unpaid_amounts": unpaid_amounts,
+            "total": total,
         }

@@ -1,8 +1,17 @@
 import pytest
 from datetime import datetime
-from app.models.schemas import Employee, ContractType, Region, PayrollEvent, EventType
+from app.models.schemas import (
+    Employee, ContractType, Region, PayrollEvent, EventType, SettlementCause
+)
 from app.services.payroll_engine import PayrollEngine
 from app.services import legal_constants
+
+
+def _event(event_type, amount, description="x"):
+    return PayrollEvent(
+        employee_id="emp123", company_id="comp1", type=event_type,
+        amount=amount, description=description, date=datetime(2026, 6, 1),
+    )
 
 C2026 = legal_constants.for_year(2026)
 
@@ -163,3 +172,100 @@ def test_mensualizado_thirteenth_adds_to_net():
     r_accrued = PayrollEngine.process_monthly_payroll(accrued, [], period="2026-06")
     r_monthly = PayrollEngine.process_monthly_payroll(monthly, [], period="2026-06")
     assert r_monthly["net_salary"] == pytest.approx(r_accrued["net_salary"] + 1000.0 / 12)
+
+
+# --- Horas extras calculadas desde horas ----------------------------------
+
+def test_horas_suplementarias_from_hours():
+    # Sueldo 1200 → valor hora 5; 10 horas suplementarias x 1.5 = 75.
+    employee = _employee(salary=1200.0)
+    events = [_event(EventType.HORAS_SUPLEMENTARIAS, 10.0)]
+    result = PayrollEngine.process_monthly_payroll(employee, events, period="2026-06")
+    assert result["earnings_breakdown"]["Horas Suplementarias (50%)"] == pytest.approx(75.0)
+    assert result["taxable_earnings"] == pytest.approx(1275.0)
+
+def test_horas_extraordinarias_from_hours():
+    # 10 horas extraordinarias x valor hora 5 x 2.0 = 100.
+    employee = _employee(salary=1200.0)
+    events = [_event(EventType.HORAS_EXTRAORDINARIAS, 10.0)]
+    result = PayrollEngine.process_monthly_payroll(employee, events, period="2026-06")
+    assert result["earnings_breakdown"]["Horas Extraordinarias (100%)"] == pytest.approx(100.0)
+    assert result["taxable_earnings"] == pytest.approx(1300.0)
+
+
+# --- Descuentos estructurados ---------------------------------------------
+
+def test_multa_capped_at_ten_percent():
+    # Multa de 200 sobre sueldo 1000 → tope 10% = 100.
+    employee = _employee(salary=1000.0)
+    result = PayrollEngine.process_monthly_payroll(
+        employee, [_event(EventType.MULTA, 200.0)], period="2026-06")
+    assert result["deductions_breakdown"]["Multa"] == pytest.approx(100.0)
+
+def test_falta_deducts_hours():
+    # 8 horas de falta sobre sueldo 1200 (valor hora 5) → 40.
+    employee = _employee(salary=1200.0)
+    result = PayrollEngine.process_monthly_payroll(
+        employee, [_event(EventType.FALTA, 8.0)], period="2026-06")
+    assert result["deductions_breakdown"]["Falta / Atraso"] == pytest.approx(40.0)
+
+def test_prestamo_categorized_deduction():
+    employee = _employee(salary=1000.0)
+    result = PayrollEngine.process_monthly_payroll(
+        employee, [_event(EventType.PRESTAMO_QUIROGRAFARIO, 120.0)], period="2026-06")
+    assert result["deductions_breakdown"]["Préstamo Quirografario IESS"] == pytest.approx(120.0)
+
+
+# --- Liquidación de haberes -----------------------------------------------
+
+def test_settlement_year_counting_calendar():
+    # 4 años, 9 meses, 3 días → completos 4; con fracción (Art. 188) 5.
+    employee = _employee(start_date=datetime(2020, 1, 1))
+    result = PayrollEngine.calculate_settlement(
+        employee, datetime(2024, 10, 4), SettlementCause.RENUNCIA)
+    assert result["full_years"] == 4
+    assert result["years_with_fraction"] == 5
+
+def test_settlement_despido_includes_indemnity_and_bonus():
+    # Reproduce el ejemplo de referencia: remuneración 482, 4a 9m 3d.
+    # Art. 188 = 482 × 5 (con fracción) = 2410; Art. 185 = 482 × 25% × 4 (completos) = 482.
+    employee = _employee(start_date=datetime(2020, 1, 1))
+    result = PayrollEngine.calculate_settlement(
+        employee, datetime(2024, 10, 4), SettlementCause.DESPIDO_INTEMPESTIVO,
+        remuneration=482.0)
+    assert result["severance_indemnity"] == pytest.approx(2410.0)
+    assert result["desahucio_bonus"] == pytest.approx(482.0)
+
+def test_settlement_despido_scale_under_3_years():
+    # ~2.5 años → con fracción 3 → 3 meses de remuneración.
+    employee = _employee(salary=1000.0, start_date=datetime(2022, 1, 1))
+    result = PayrollEngine.calculate_settlement(
+        employee, datetime(2024, 7, 1), SettlementCause.DESPIDO_INTEMPESTIVO)
+    assert result["severance_indemnity"] == pytest.approx(3000.0)
+    # Despido también paga bonificación 25% por años completos (2).
+    assert result["desahucio_bonus"] == pytest.approx(0.25 * 1000.0 * 2)
+
+def test_settlement_desahucio_uses_full_years_only():
+    # 4a 9m → bonificación 25% SOLO por años completos (4); fracción no cuenta.
+    employee = _employee(salary=1000.0, start_date=datetime(2020, 1, 1))
+    for cause in (SettlementCause.DESAHUCIO_EMPLEADOR, SettlementCause.DESAHUCIO_TRABAJADOR):
+        result = PayrollEngine.calculate_settlement(employee, datetime(2024, 10, 4), cause)
+        assert result["desahucio_bonus"] == pytest.approx(0.25 * 1000.0 * 4)
+        assert result["severance_indemnity"] == 0.0
+
+def test_settlement_vacation_uses_remuneration_over_30():
+    # Vacaciones (Art. 78): (remuneración / 30) × días. 15 días pendientes a 482 = 241.
+    employee = _employee(start_date=datetime(2020, 7, 1))
+    result = PayrollEngine.calculate_settlement(
+        employee, datetime(2024, 7, 1), SettlementCause.RENUNCIA,
+        remuneration=482.0, pending_vacation_days=15.0)
+    assert result["vacation_pending"] == pytest.approx(241.0)
+
+def test_settlement_renuncia_has_no_indemnity():
+    employee = _employee(salary=1000.0, start_date=datetime(2020, 1, 1))
+    result = PayrollEngine.calculate_settlement(
+        employee, datetime(2024, 7, 1), SettlementCause.RENUNCIA)
+    assert result["severance_indemnity"] == 0.0
+    assert result["desahucio_bonus"] == 0.0
+    # Pero sí incluye proporcionales (13º, 14º, vacaciones).
+    assert result["total"] > 0

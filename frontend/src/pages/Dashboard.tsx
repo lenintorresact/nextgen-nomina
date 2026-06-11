@@ -169,6 +169,10 @@ const Dashboard: React.FC = () => {
               onClick={() => navigate('/close-period')}>
               Cerrar Mes
             </Button>
+            <Button fullWidth variant="outlined" color="inherit" sx={{ mt: 1.5, color: 'text.primary' }}
+              onClick={() => navigate('/settlement')}>
+              Liquidación de Haberes
+            </Button>
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2, fontWeight: 600 }}>
               Registra una novedad y el total se recalcula al instante, sin cerrar el mes.
             </Typography>
