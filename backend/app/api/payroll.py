@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from typing import List
 from ..models.schemas import PayrollEvent, PayrollSlip, Employee, SettlementCause
 from ..core.config import db, get_current_user
 from ..services.payroll_engine import PayrollEngine
+from ..services import pdf_reports
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -186,3 +187,68 @@ async def settlement(
         pending_reserve_funds=pending_reserve_funds,
         unpaid_amounts=unpaid_amounts,
     )
+
+
+@router.get("/payslip/{company_id}/{employee_id}/pdf")
+async def payslip_pdf(company_id: str, employee_id: str, period: str = None,
+                      user=Depends(get_current_user)):
+    """Rol de pagos individual (PDF) de un empleado. Se recalcula en vivo."""
+    company = _verify_company_ownership(company_id, user)
+    company["id"] = company_id
+    now_ec = datetime.now(EC_TZ)
+    if not period:
+        period = now_ec.strftime("%Y-%m")
+
+    emp_doc = db.collection("employees").document(employee_id).get()
+    if not emp_doc.exists or emp_doc.to_dict().get("company_id") != company_id:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    emp_data = emp_doc.to_dict()
+    emp_data["id"] = emp_doc.id
+    employee = Employee(**emp_data)
+
+    period_events = _employee_events_for_period(employee.id, period)
+    calc = PayrollEngine.process_monthly_payroll(
+        employee, period_events, current_date=now_ec, period=period)
+
+    pdf = pdf_reports.build_payslip_pdf(company, employee, calc, period)
+    filename = f"rol_{employee.cedula}_{period}.pdf"
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename={filename}"})
+
+
+@router.get("/payroll-report/{company_id}/pdf")
+async def payroll_report_pdf(company_id: str, period: str = None,
+                             user=Depends(get_current_user)):
+    """Rol de pagos consolidado (PDF) de toda la empresa para un período."""
+    company = _verify_company_ownership(company_id, user)
+    company["id"] = company_id
+    now_ec = datetime.now(EC_TZ)
+    if not period:
+        period = now_ec.strftime("%Y-%m")
+
+    employees_docs = db.collection("employees").where("company_id", "==", company_id).stream()
+
+    rows = []
+    totals = {"net_salary": 0.0, "iess_employee": 0.0, "income_tax": 0.0}
+    for emp_doc in employees_docs:
+        emp_data = emp_doc.to_dict()
+        emp_data["id"] = emp_doc.id
+        employee = Employee(**emp_data)
+
+        period_events = _employee_events_for_period(employee.id, period)
+        calc = PayrollEngine.process_monthly_payroll(
+            employee, period_events, current_date=now_ec, period=period)
+
+        rows.append({
+            "first_name": employee.first_name,
+            "last_name": employee.last_name,
+            "base_salary": employee.salary,
+            **calc,
+        })
+        for key in totals:
+            totals[key] += calc.get(key, 0.0)
+
+    pdf = pdf_reports.build_consolidated_pdf(company, rows, period, totals)
+    filename = f"rol_consolidado_{period}.pdf"
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename={filename}"})

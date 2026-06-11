@@ -4,13 +4,33 @@ import {
   Container, Typography, Card, CardContent, Box, Button, Divider,
   Table, TableBody, TableCell, TableContainer, TableRow
 } from '@mui/material';
+import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+import API_URL from '../api_config';
 
 const money = (n: number) => `$${(n ?? 0).toFixed(2)}`;
+
+export const downloadPdf = async (
+  getToken: () => Promise<string | null>, url: string, filename: string,
+) => {
+  const token = await getToken();
+  const res = await axios.get(url, {
+    headers: { Authorization: `Bearer ${token}` }, responseType: 'blob',
+  });
+  const blobUrl = window.URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename;
+  a.click();
+  window.URL.revokeObjectURL(blobUrl);
+};
 
 const EmployeeDetail: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { getToken } = useAuth();
   const employee = (location.state as any)?.employee;
+  const company = (location.state as any)?.company;
 
   if (!employee) {
     return (
@@ -26,7 +46,19 @@ const EmployeeDetail: React.FC = () => {
 
   return (
     <Container sx={{ mt: 4, mb: 6 }} maxWidth="sm">
-      <Button onClick={() => navigate('/dashboard')} sx={{ mb: 2 }}>Volver</Button>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+        <Button onClick={() => navigate('/dashboard')}>Volver</Button>
+        {company && (
+          <Button variant="outlined" color="inherit" sx={{ color: 'text.primary' }}
+            onClick={() => downloadPdf(
+              getToken,
+              `${API_URL}/payroll/payslip/${company.id}/${employee.employee_id}/pdf`,
+              `rol_${employee.last_name}_${employee.first_name}.pdf`,
+            )}>
+            Descargar rol (PDF)
+          </Button>
+        )}
+      </Box>
       <Card>
         <CardContent>
           <Typography variant="h4" gutterBottom>{employee.first_name} {employee.last_name}</Typography>

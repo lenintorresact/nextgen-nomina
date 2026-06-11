@@ -10,6 +10,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api_config';
+import { downloadPdf } from './EmployeeDetail';
 
 const money = (n: number) =>
   `$${(n ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -172,6 +173,15 @@ const Dashboard: React.FC = () => {
             <Button fullWidth variant="outlined" color="inherit" sx={{ mt: 1.5, color: 'text.primary' }}
               onClick={() => navigate('/settlement')}>
               Liquidación de Haberes
+            </Button>
+            <Button fullWidth variant="outlined" color="inherit" sx={{ mt: 1.5, color: 'text.primary' }}
+              disabled={!company}
+              onClick={() => company && downloadPdf(
+                getToken,
+                `${API_URL}/payroll/payroll-report/${company.id}/pdf${preview?.period ? `?period=${preview.period}` : ''}`,
+                `rol_consolidado_${preview?.period ?? ''}.pdf`,
+              )}>
+              Rol Consolidado (PDF)
             </Button>
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2, fontWeight: 600 }}>
               Registra una novedad y el total se recalcula al instante, sin cerrar el mes.
