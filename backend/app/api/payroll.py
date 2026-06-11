@@ -290,3 +290,71 @@ async def planilla_iess_pdf(company_id: str, period: str = None,
     filename = f"planilla_iess_{period}.pdf"
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f"inline; filename={filename}"})
+
+
+def _annual_form107_data(employee: Employee, year: int, constants) -> tuple:
+    """Agrega los valores anuales del Formulario 107 para un empleado.
+
+    Suma los roles cerrados del ejercicio; si no hay ninguno, proyecta el mes
+    actual × 12 (devuelve projected=True). Reconstruye los ingresos gravables a
+    partir del aporte personal IESS (que se cobra exactamente sobre la base).
+    """
+    slips = db.collection("slips").where("employee_id", "==", employee.id).stream()
+    year_slips = [s.to_dict() for s in slips if str(s.to_dict().get("period", "")).startswith(str(year))]
+
+    projected = False
+    if year_slips:
+        aporte_iess = sum(s.get("iess_employee", 0.0) for s in year_slips)
+        ir_retenido = sum(s.get("income_tax", 0.0) for s in year_slips)
+        ingresos_gravados = aporte_iess / constants.iess_employee if constants.iess_employee else 0.0
+    else:
+        # Proyección: mes representativo × 12.
+        projected = True
+        calc = PayrollEngine.process_monthly_payroll(employee, [], period=f"{year}-01")
+        ingresos_gravados = calc["taxable_earnings"] * 12
+        aporte_iess = calc["iess_employee"] * 12
+        ir_retenido = calc["income_tax"] * 12
+
+    base_imponible = max(0.0, ingresos_gravados - aporte_iess)
+    impuesto_bruto = PayrollEngine.calculate_ir_tax(base_imponible, constants)
+    rebaja = PayrollEngine.calculate_personal_expenses_rebate(
+        employee.projected_personal_expenses, employee.family_burdens, constants)
+    impuesto_neto = max(0.0, impuesto_bruto - rebaja)
+
+    data = {
+        "ingresos_gravados": ingresos_gravados,
+        "sobresueldos": 0.0,  # no se separa del total en este sistema
+        "aporte_iess": aporte_iess,
+        "base_imponible": base_imponible,
+        "impuesto_causado_bruto": impuesto_bruto,
+        "rebaja_gastos": rebaja,
+        "impuesto_causado_neto": impuesto_neto,
+        "impuesto_retenido": ir_retenido,
+        "impuesto_asumido": 0.0,
+    }
+    return data, projected
+
+
+@router.get("/form107/{company_id}/{employee_id}/pdf")
+async def form107_pdf(company_id: str, employee_id: str, year: int = None,
+                      user=Depends(get_current_user)):
+    """Comprobante de retenciones (Formulario 107) anual de un empleado (PDF)."""
+    company = _verify_company_ownership(company_id, user)
+    company["id"] = company_id
+    if not year:
+        year = datetime.now(EC_TZ).year
+
+    emp_doc = db.collection("employees").document(employee_id).get()
+    if not emp_doc.exists or emp_doc.to_dict().get("company_id") != company_id:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    emp_data = emp_doc.to_dict()
+    emp_data["id"] = emp_doc.id
+    employee = Employee(**emp_data)
+
+    constants = legal_constants.for_year(year)
+    data, projected = _annual_form107_data(employee, year, constants)
+
+    pdf = pdf_reports.build_form107_pdf(company, employee, data, year, projected=projected)
+    filename = f"form107_{employee.cedula}_{year}.pdf"
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename={filename}"})

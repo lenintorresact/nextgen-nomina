@@ -49,14 +49,24 @@ const EmployeeDetail: React.FC = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
         <Button onClick={() => navigate('/dashboard')}>Volver</Button>
         {company && (
-          <Button variant="outlined" color="inherit" sx={{ color: 'text.primary' }}
-            onClick={() => downloadPdf(
-              getToken,
-              `${API_URL}/payroll/payslip/${company.id}/${employee.employee_id}/pdf`,
-              `rol_${employee.last_name}_${employee.first_name}.pdf`,
-            )}>
-            Descargar rol (PDF)
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button variant="outlined" color="inherit" sx={{ color: 'text.primary' }}
+              onClick={() => downloadPdf(
+                getToken,
+                `${API_URL}/payroll/payslip/${company.id}/${employee.employee_id}/pdf`,
+                `rol_${employee.last_name}_${employee.first_name}.pdf`,
+              )}>
+              Rol (PDF)
+            </Button>
+            <Button variant="outlined" color="inherit" sx={{ color: 'text.primary' }}
+              onClick={() => downloadPdf(
+                getToken,
+                `${API_URL}/payroll/form107/${company.id}/${employee.employee_id}/pdf`,
+                `form107_${employee.last_name}_${employee.first_name}.pdf`,
+              )}>
+              Form. 107 (PDF)
+            </Button>
+          </Box>
         )}
       </Box>
       <Card>

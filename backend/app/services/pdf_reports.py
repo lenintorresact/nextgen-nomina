@@ -217,6 +217,82 @@ def build_planilla_iess_pdf(company: Dict, rows: List[Dict], period: str, consta
     return buffer.getvalue()
 
 
+# Filas del Formulario 107 (comprobante de retenciones en relación de dependencia).
+# Editable: cada fila es (casillero, etiqueta, clave en `data`). El nº de casillero
+# es opcional — solo se imprimen los CONFIRMADOS contra la fuente oficial del SRI
+# (303 sobresueldos/comisiones; 407 impuesto retenido). Los demás quedan en None
+# hasta confirmar el instructivo oficial; completar aquí cuando se disponga de él.
+FORM107_ROWS = [
+    (None, "Ingresos gravados con este empleador", "ingresos_gravados"),
+    ("303", "Sobresueldos, comisiones, bonos y otros ingresos gravados", "sobresueldos"),
+    (None, "(-) Aporte personal IESS", "aporte_iess"),
+    (None, "Base imponible gravada", "base_imponible"),
+    (None, "Impuesto a la renta causado", "impuesto_causado_bruto"),
+    (None, "(-) Rebaja por gastos personales", "rebaja_gastos"),
+    (None, "Impuesto a la renta causado (neto)", "impuesto_causado_neto"),
+    ("407", "Valor del impuesto retenido", "impuesto_retenido"),
+    (None, "Impuesto asumido por el empleador", "impuesto_asumido"),
+]
+
+
+def build_form107_pdf(company: Dict, employee, data: Dict, year: int,
+                      projected: bool = False) -> bytes:
+    """Comprobante de retenciones (Formulario 107) anual de un empleado.
+
+    Filas definidas en FORM107_ROWS (editable). `data` mapea cada clave a su valor
+    anual. Si `projected` es True, los valores se proyectaron (mes × 12) por falta
+    de roles cerrados y se marca como tal.
+    """
+    styles = _styles()
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=18 * mm, bottomMargin=18 * mm)
+
+    elements = _header(company, "COMPROBANTE DE RETENCIONES — FORMULARIO 107", str(year), styles)
+    elements.append(Paragraph(
+        f"<b>{employee.first_name} {employee.last_name}</b> &nbsp;·&nbsp; "
+        f"Cédula {employee.cedula} &nbsp;·&nbsp; Ejercicio fiscal {year}", styles["Sub"]))
+    if projected:
+        elements.append(Paragraph(
+            "<b>VALORES PROYECTADOS</b> (no hay roles cerrados del ejercicio; "
+            "estimado como mes × 12).", styles["Sub"]))
+    elements.append(Spacer(1, 5 * mm))
+
+    table_data = [["Casillero", "Concepto", "Valor"]]
+    for casillero, label, key in FORM107_ROWS:
+        table_data.append([casillero or "", label, _money(data.get(key, 0))])
+
+    table = Table(table_data, colWidths=[20 * mm, 110 * mm, 30 * mm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), _MINT),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, _LINE),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F7FBF9")]),
+    ]))
+    elements.append(table)
+
+    elements.append(Spacer(1, 6 * mm))
+    elements.append(Paragraph(
+        "Nota: los números de casillero no confirmados contra el instructivo oficial del SRI "
+        "se dejan en blanco. Entrega al empleado hasta el 31 de enero del año siguiente.",
+        styles["Sub"]))
+
+    elements.append(Spacer(1, 14 * mm))
+    sign = Table([["_______________________"], ["Agente de retención (empleador)"]],
+                 colWidths=[90 * mm])
+    sign.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                              ("FONTSIZE", (0, 0), (-1, -1), 8)]))
+    elements.append(sign)
+
+    doc.build(elements)
+    return buffer.getvalue()
+
+
 def build_consolidated_pdf(company: Dict, rows: List[Dict], period: str, totals: Dict) -> bytes:
     """Rol de pagos consolidado: una fila por empleado más totales de la empresa.
 

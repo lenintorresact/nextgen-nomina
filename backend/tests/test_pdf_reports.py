@@ -58,3 +58,15 @@ def test_planilla_employer_breakdown_sums_to_total_rate():
     # El desglose patronal (11.15 + 0.5 + 0.5) debe sumar el patronal total (12.15%).
     c = legal_constants.for_year(2026)
     assert c.iess_employer_iess + c.iece_rate + c.secap_rate == pytest.approx(c.iess_employer)
+
+
+def test_build_form107_pdf_returns_pdf_bytes():
+    emp = _employee()
+    data = {
+        "ingresos_gravados": 18000.0, "sobresueldos": 0.0, "aporte_iess": 1701.0,
+        "base_imponible": 16299.0, "impuesto_causado_bruto": 242.0, "rebaja_gastos": 0.0,
+        "impuesto_causado_neto": 242.0, "impuesto_retenido": 242.0, "impuesto_asumido": 0.0,
+    }
+    pdf = pdf_reports.build_form107_pdf(_COMPANY, emp, data, 2026, projected=True)
+    assert isinstance(pdf, bytes) and len(pdf) > 0
+    assert pdf[:4] == b"%PDF"
