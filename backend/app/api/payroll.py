@@ -358,3 +358,50 @@ async def form107_pdf(company_id: str, employee_id: str, year: int = None,
     filename = f"form107_{employee.cedula}_{year}.pdf"
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f"inline; filename={filename}"})
+
+
+@router.get("/decimos-report/{company_id}/pdf")
+async def decimos_report_pdf(company_id: str, year: int = None,
+                             user=Depends(get_current_user)):
+    """Reporte de décimos (13º y 14º) de la empresa para un ejercicio (PDF)."""
+    company = _verify_company_ownership(company_id, user)
+    company["id"] = company_id
+    if not year:
+        year = datetime.now(EC_TZ).year
+    constants = legal_constants.for_year(year)
+
+    employees_docs = db.collection("employees").where("company_id", "==", company_id).stream()
+
+    rows = []
+    any_projected = False
+    for emp_doc in employees_docs:
+        emp_data = emp_doc.to_dict()
+        emp_data["id"] = emp_doc.id
+        employee = Employee(**emp_data)
+
+        slips = db.collection("slips").where("employee_id", "==", employee.id).stream()
+        year_slips = [s.to_dict() for s in slips
+                      if str(s.to_dict().get("period", "")).startswith(str(year))]
+
+        if year_slips:
+            thirteenth = sum(s.get("thirteenth_salary", 0.0) for s in year_slips)
+        else:
+            # Proyección: provisión mensual del 13º × 12 ≈ una remuneración anual / 12.
+            any_projected = True
+            calc = PayrollEngine.process_monthly_payroll(employee, [], period=f"{year}-01")
+            thirteenth = calc["thirteenth_salary"] * 12
+
+        rows.append({
+            "cedula": employee.cedula,
+            "first_name": employee.first_name,
+            "last_name": employee.last_name,
+            "thirteenth": thirteenth,
+            "fourteenth": constants.sbu,  # 14º anual = 1 SBU (completo); prorratea si parcial
+            "forma_13": "Acumulado" if employee.accumulate_13th else "Mensualizado",
+            "forma_14": "Acumulado" if employee.accumulate_14th else "Mensualizado",
+        })
+
+    pdf = pdf_reports.build_decimos_pdf(company, rows, year, projected=any_projected)
+    filename = f"decimos_{year}.pdf"
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename={filename}"})

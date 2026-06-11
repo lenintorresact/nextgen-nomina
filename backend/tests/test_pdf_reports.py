@@ -70,3 +70,14 @@ def test_build_form107_pdf_returns_pdf_bytes():
     pdf = pdf_reports.build_form107_pdf(_COMPANY, emp, data, 2026, projected=True)
     assert isinstance(pdf, bytes) and len(pdf) > 0
     assert pdf[:4] == b"%PDF"
+
+
+def test_build_decimos_pdf_returns_pdf_bytes():
+    rows = [{
+        "cedula": "1712345678", "first_name": "Juan", "last_name": "Perez",
+        "thirteenth": 1500.0, "fourteenth": 482.0,
+        "forma_13": "Acumulado", "forma_14": "Mensualizado",
+    }]
+    pdf = pdf_reports.build_decimos_pdf(_COMPANY, rows, 2026, projected=True)
+    assert isinstance(pdf, bytes) and len(pdf) > 0
+    assert pdf[:4] == b"%PDF"

@@ -192,6 +192,15 @@ const Dashboard: React.FC = () => {
               )}>
               Planilla IESS (PDF)
             </Button>
+            <Button fullWidth variant="outlined" color="inherit" sx={{ mt: 1.5, color: 'text.primary' }}
+              disabled={!company}
+              onClick={() => company && downloadPdf(
+                getToken,
+                `${API_URL}/payroll/decimos-report/${company.id}/pdf`,
+                'decimos.pdf',
+              )}>
+              Reporte de Décimos (PDF)
+            </Button>
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2, fontWeight: 600 }}>
               Registra una novedad y el total se recalcula al instante, sin cerrar el mes.
             </Typography>

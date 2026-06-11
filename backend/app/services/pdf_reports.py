@@ -235,6 +235,70 @@ FORM107_ROWS = [
 ]
 
 
+# Columnas del reporte de décimos (13º y 14º). Editable: (etiqueta, fn(row)).
+# `row` trae cedula, first_name, last_name, thirteenth, fourteenth, forma_13, forma_14.
+DECIMOS_COLUMNS = [
+    ("Cédula", lambda r: r.get("cedula", "")),
+    ("Empleado", lambda r: f"{r.get('first_name', '')} {r.get('last_name', '')}"),
+    ("Décimo Tercero", lambda r: _money(r.get("thirteenth", 0))),
+    ("Forma pago 13º", lambda r: r.get("forma_13", "")),
+    ("Décimo Cuarto", lambda r: _money(r.get("fourteenth", 0))),
+    ("Forma pago 14º", lambda r: r.get("forma_14", "")),
+]
+
+
+def build_decimos_pdf(company: Dict, rows: List[Dict], year: int,
+                      projected: bool = False) -> bytes:
+    """Reporte de décimos (13º y 14º) de la empresa para un ejercicio.
+
+    Columnas en DECIMOS_COLUMNS (editable). Resumen interno / de conciliación; el
+    archivo de carga oficial del SUT (Ministerio de Trabajo) se genera aparte una
+    vez confirmada su plantilla. `projected` marca valores proyectados (sin roles).
+    """
+    styles = _styles()
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15 * mm, bottomMargin=15 * mm)
+
+    elements = _header(company, "REPORTE DE DÉCIMOS (13º Y 14º)", str(year), styles)
+    elements.append(Paragraph(
+        "13º: pago hasta el 24 de diciembre. 14º: hasta el 15 de marzo (Costa/Insular) "
+        "o 15 de agosto (Sierra/Amazonía). Registro en el SUT según 9º dígito del RUC.",
+        styles["Sub"]))
+    if projected:
+        elements.append(Paragraph(
+            "<b>VALORES PROYECTADOS</b> (sin roles cerrados; estimado).", styles["Sub"]))
+    elements.append(Spacer(1, 4 * mm))
+
+    header = [c[0] for c in DECIMOS_COLUMNS]
+    data = [header]
+    total_13 = total_14 = 0.0
+    for r in rows:
+        data.append([fn(r) for _, fn in DECIMOS_COLUMNS])
+        total_13 += r.get("thirteenth", 0)
+        total_14 += r.get("fourteenth", 0)
+    data.append(["TOTALES", "", _money(total_13), "", _money(total_14), ""])
+
+    table = Table(data, colWidths=[24 * mm, 48 * mm, 28 * mm, 26 * mm, 28 * mm, 26 * mm],
+                  repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), _MINT),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("BACKGROUND", (0, -1), (-1, -1), _MINT_SOFT),
+        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.25, _LINE),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#F7FBF9")]),
+    ]))
+    elements.append(table)
+
+    doc.build(elements)
+    return buffer.getvalue()
+
+
 def build_form107_pdf(company: Dict, employee, data: Dict, year: int,
                       projected: bool = False) -> bytes:
     """Comprobante de retenciones (Formulario 107) anual de un empleado.
