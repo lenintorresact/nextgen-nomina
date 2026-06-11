@@ -183,6 +183,15 @@ const Dashboard: React.FC = () => {
               )}>
               Rol Consolidado (PDF)
             </Button>
+            <Button fullWidth variant="outlined" color="inherit" sx={{ mt: 1.5, color: 'text.primary' }}
+              disabled={!company}
+              onClick={() => company && downloadPdf(
+                getToken,
+                `${API_URL}/payroll/planilla-iess/${company.id}/pdf${preview?.period ? `?period=${preview.period}` : ''}`,
+                `planilla_iess_${preview?.period ?? ''}.pdf`,
+              )}>
+              Planilla IESS (PDF)
+            </Button>
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2, fontWeight: 600 }}>
               Registra una novedad y el total se recalcula al instante, sin cerrar el mes.
             </Typography>

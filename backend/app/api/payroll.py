@@ -3,7 +3,7 @@ from typing import List
 from ..models.schemas import PayrollEvent, PayrollSlip, Employee, SettlementCause
 from ..core.config import db, get_current_user
 from ..services.payroll_engine import PayrollEngine
-from ..services import pdf_reports
+from ..services import pdf_reports, legal_constants
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -250,5 +250,43 @@ async def payroll_report_pdf(company_id: str, period: str = None,
 
     pdf = pdf_reports.build_consolidated_pdf(company, rows, period, totals)
     filename = f"rol_consolidado_{period}.pdf"
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename={filename}"})
+
+
+@router.get("/planilla-iess/{company_id}/pdf")
+async def planilla_iess_pdf(company_id: str, period: str = None,
+                            user=Depends(get_current_user)):
+    """Planilla de aportes IESS (PDF) de la empresa para un período."""
+    company = _verify_company_ownership(company_id, user)
+    company["id"] = company_id
+    now_ec = datetime.now(EC_TZ)
+    if not period:
+        period = now_ec.strftime("%Y-%m")
+    constants = legal_constants.for_year(int(period[:4]))
+
+    employees_docs = db.collection("employees").where("company_id", "==", company_id).stream()
+
+    rows = []
+    for emp_doc in employees_docs:
+        emp_data = emp_doc.to_dict()
+        emp_data["id"] = emp_doc.id
+        employee = Employee(**emp_data)
+
+        period_events = _employee_events_for_period(employee.id, period)
+        calc = PayrollEngine.process_monthly_payroll(
+            employee, period_events, current_date=now_ec, period=period)
+
+        rows.append({
+            "cedula": employee.cedula,
+            "first_name": employee.first_name,
+            "last_name": employee.last_name,
+            "days": 30,  # el run mensual no registra días trabajados; se asume mes completo
+            "taxable": calc["taxable_earnings"],
+            "reserve_funds": calc["reserve_funds"],
+        })
+
+    pdf = pdf_reports.build_planilla_iess_pdf(company, rows, period, constants)
+    filename = f"planilla_iess_{period}.pdf"
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f"inline; filename={filename}"})

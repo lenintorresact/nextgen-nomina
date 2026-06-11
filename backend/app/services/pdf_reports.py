@@ -141,6 +141,82 @@ def build_payslip_pdf(company: Dict, employee, calc: Dict, period: str) -> bytes
     return buffer.getvalue()
 
 
+# Columnas de la planilla de aportes IESS. Editable: cada columna es
+# (etiqueta, función(row, c) -> valor). `c` es el LegalYear con las tasas.
+# `row` trae cedula, first_name, last_name, days, taxable, reserve_funds.
+PLANILLA_COLUMNS = [
+    ("Cédula", lambda r, c: r.get("cedula", "")),
+    ("Empleado", lambda r, c: f"{r.get('first_name', '')} {r.get('last_name', '')}"),
+    ("Días", lambda r, c: str(r.get("days", 30))),
+    ("Sueldo imponible", lambda r, c: _money(r.get("taxable", 0))),
+    ("Ap. personal 9.45%", lambda r, c: _money(r.get("taxable", 0) * c.iess_employee)),
+    ("Ap. patronal 11.15%", lambda r, c: _money(r.get("taxable", 0) * c.iess_employer_iess)),
+    ("IECE 0.5%", lambda r, c: _money(r.get("taxable", 0) * c.iece_rate)),
+    ("SECAP 0.5%", lambda r, c: _money(r.get("taxable", 0) * c.secap_rate)),
+    ("F. reserva 8.33%", lambda r, c: _money(r.get("reserve_funds", 0))),
+    ("Total", lambda r, c: _money(
+        r.get("taxable", 0) * (c.iess_employee + c.iess_employer) + r.get("reserve_funds", 0)
+    )),
+]
+
+
+def build_planilla_iess_pdf(company: Dict, rows: List[Dict], period: str, constants) -> bytes:
+    """Planilla de aportes IESS (PDF legible): desglose por empleado y totales.
+
+    Columnas definidas en PLANILLA_COLUMNS (editable). `constants` es el LegalYear
+    con las tasas vigentes; `rows` trae por empleado cedula/nombre/days/taxable/
+    reserve_funds (días por defecto 30: el run mensual no registra días trabajados).
+    """
+    styles = _styles()
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15 * mm, bottomMargin=15 * mm)
+
+    elements = _header(company, "PLANILLA DE APORTES IESS", period, styles)
+    elements.append(Paragraph(
+        "Pago hasta el día 15 del mes siguiente. Aporte patronal total 12.15% "
+        "(11.15% IESS + 0.5% IECE + 0.5% SECAP).", styles["Sub"]))
+    elements.append(Spacer(1, 4 * mm))
+
+    header = [c[0] for c in PLANILLA_COLUMNS]
+    data = [header]
+    # Totales de las columnas numéricas (todas menos Cédula/Empleado/Días).
+    numeric_totals = [0.0] * len(PLANILLA_COLUMNS)
+    for r in rows:
+        taxable = r.get("taxable", 0)
+        reserve = r.get("reserve_funds", 0)
+        data.append([fn(r, constants) for _, fn in PLANILLA_COLUMNS])
+        numeric_totals[3] += taxable
+        numeric_totals[4] += taxable * constants.iess_employee
+        numeric_totals[5] += taxable * constants.iess_employer_iess
+        numeric_totals[6] += taxable * constants.iece_rate
+        numeric_totals[7] += taxable * constants.secap_rate
+        numeric_totals[8] += reserve
+        numeric_totals[9] += taxable * (constants.iess_employee + constants.iess_employer) + reserve
+
+    total_row = ["TOTALES", "", ""] + [_money(v) for v in numeric_totals[3:]]
+    data.append(total_row)
+
+    col_widths = [22 * mm, 38 * mm, 9 * mm, 22 * mm, 20 * mm, 21 * mm, 14 * mm, 15 * mm, 19 * mm, 20 * mm]
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), _MINT),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("BACKGROUND", (0, -1), (-1, -1), _MINT_SOFT),
+        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.25, _LINE),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#F7FBF9")]),
+    ]))
+    elements.append(table)
+
+    doc.build(elements)
+    return buffer.getvalue()
+
+
 def build_consolidated_pdf(company: Dict, rows: List[Dict], period: str, totals: Dict) -> bytes:
     """Rol de pagos consolidado: una fila por empleado más totales de la empresa.
 

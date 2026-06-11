@@ -22,13 +22,17 @@ class LegalYear:
     """Conjunto de parámetros legales vigentes para un año fiscal."""
     sbu: float                                  # Salario Básico Unificado
     iess_employee: float                        # Aporte personal IESS
-    iess_employer: float                        # Aporte patronal IESS (incl. IECE/SECAP)
+    iess_employer: float                        # Aporte patronal total (incl. IECE/SECAP)
     reserve_funds: float                        # Fondos de reserva (tras 1 año)
     canasta_basica: float                       # Canasta familiar básica (enero)
     ir_brackets: List[IRBracket]                # Tabla del Impuesto a la Renta
     gastos_rebate_rate: float                   # % de rebaja sobre gastos personales
     # Nº de canastas básicas tope para la rebaja, según nº de cargas familiares.
     canastas_by_cargas: Dict[int, int] = field(default_factory=dict)
+    # Desglose del aporte patronal total (suma = iess_employer). Para la planilla IESS.
+    iess_employer_iess: float = 0.1115          # Aporte patronal IESS puro (11.15%)
+    iece_rate: float = 0.005                    # IECE 0.5%
+    secap_rate: float = 0.005                   # SECAP 0.5%
 
     def canastas_for_cargas(self, cargas: int) -> int:
         """Nº de canastas tope para un nº de cargas (satura en el máximo definido)."""
