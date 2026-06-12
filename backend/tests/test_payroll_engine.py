@@ -261,10 +261,10 @@ def test_settlement_despido_scale_under_3_years():
 def test_settlement_desahucio_uses_full_years_only():
     # 4a 9m → bonificación 25% SOLO por años completos (4); fracción no cuenta.
     employee = _employee(salary=1000.0, start_date=datetime(2020, 1, 1))
-    for cause in (SettlementCause.DESAHUCIO_EMPLEADOR, SettlementCause.DESAHUCIO_TRABAJADOR):
-        result = PayrollEngine.calculate_settlement(employee, datetime(2024, 10, 4), cause)
-        assert result["desahucio_bonus"] == pytest.approx(0.25 * 1000.0 * 4)
-        assert result["severance_indemnity"] == 0.0
+    result = PayrollEngine.calculate_settlement(
+        employee, datetime(2024, 10, 4), SettlementCause.DESAHUCIO_TRABAJADOR)
+    assert result["desahucio_bonus"] == pytest.approx(0.25 * 1000.0 * 4)
+    assert result["severance_indemnity"] == 0.0
 
 def test_settlement_vacation_uses_remuneration_over_30():
     # Vacaciones (Art. 78): (remuneración / 30) × días. 15 días pendientes a 482 = 241.

@@ -375,6 +375,39 @@ async def settlement_record(employee_id: str, user=Depends(get_current_user)):
     return rec.to_dict()
 
 
+@router.get("/settlement-comparison/{employee_id}")
+async def settlement_comparison(
+    employee_id: str,
+    termination_date: str,
+    remuneration: float | None = None,
+    pending_vacation_days: float = 0.0,
+    pending_reserve_funds: float = 0.0,
+    unpaid_amounts: float = 0.0,
+    user=Depends(get_current_user),
+):
+    """Liquidación calculada para CADA causa de salida, para comparar opciones.
+
+    Mismos parámetros que /settlement pero sin `cause`: devuelve un resultado por
+    cada causa válida, de modo que el usuario elija con el costo a la vista.
+    """
+    employee, _ = _load_owned_employee(employee_id, user)
+    try:
+        term = datetime.strptime(termination_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="termination_date must be YYYY-MM-DD")
+
+    return [
+        PayrollEngine.calculate_settlement(
+            employee, term, cause,
+            remuneration=remuneration,
+            pending_vacation_days=pending_vacation_days,
+            pending_reserve_funds=pending_reserve_funds,
+            unpaid_amounts=unpaid_amounts,
+        )
+        for cause in SettlementCause
+    ]
+
+
 @router.get("/payslip/{company_id}/{employee_id}/pdf")
 async def payslip_pdf(company_id: str, employee_id: str, period: str = None,
                       user=Depends(get_current_user)):

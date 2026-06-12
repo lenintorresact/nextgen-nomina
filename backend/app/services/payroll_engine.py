@@ -352,8 +352,7 @@ class PayrollEngine:
             months = 3 if years_with_fraction <= 3 else min(years_with_fraction, 25)
             indemnizacion = remuneration * months
             desahucio_bonus = 0.25 * remuneration * full_years
-        elif cause in (SettlementCause.DESAHUCIO_EMPLEADOR,
-                       SettlementCause.DESAHUCIO_TRABAJADOR):
+        elif cause == SettlementCause.DESAHUCIO_TRABAJADOR:
             # Art. 185: 25% de la remuneración SOLO por años COMPLETOS (las
             # fracciones de año no cuentan para este rubro).
             desahucio_bonus = 0.25 * remuneration * full_years

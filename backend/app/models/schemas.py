@@ -76,9 +76,9 @@ class SettlementCause(str, Enum):
     """Causa de terminación que define la indemnización en la liquidación."""
     # Despido injustificado: indemnización Art. 188 + bonificación 25% Art. 185.
     DESPIDO_INTEMPESTIVO = "Despido Intempestivo"
-    # Desahucio (empleador o trabajador, con aviso): solo bonificación 25% Art. 185
-    # sobre años COMPLETOS (las fracciones no cuentan para este rubro).
-    DESAHUCIO_EMPLEADOR = "Desahucio por el Empleador"
+    # Desahucio del trabajador (Art. 184, reforma 2015): aviso del trabajador con
+    # 15 días; bonificación 25% Art. 185 solo por años COMPLETOS. La figura del
+    # desahucio por el empleador fue ELIMINADA en 2015 (sin causa justa => despido).
     DESAHUCIO_TRABAJADOR = "Desahucio por el Trabajador"
     # Renuncia voluntaria (Art. 180): solo proporcionales, sin indemnización.
     RENUNCIA = "Renuncia Voluntaria"
