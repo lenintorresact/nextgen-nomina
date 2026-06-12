@@ -1,16 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Container, Typography, Card, CardContent, Button, List, ListItem, ListItemButton,
-  ListItemText, ListItemAvatar, Avatar, Divider, Box, Stack, Chip, CircularProgress
+  ListItemText, ListItemAvatar, Avatar, Divider, Box, Stack, Chip, CircularProgress,
+  IconButton, Tooltip, Snackbar, Alert, useMediaQuery, useTheme
 } from '@mui/material';
 import { keyframes } from '@mui/system';
 import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
 import BoltIcon from '@mui/icons-material/Bolt';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api_config';
 import { downloadPdf } from './EmployeeDetail';
+import QuickEventDialog from '../components/QuickEventDialog';
+import type { EventBucket } from '../lib/payrollEvents';
 
 const money = (n: number) =>
   `$${(n ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -65,29 +69,50 @@ const Stat: React.FC<{ value: string; caption: string; primary?: boolean }> = ({
 const Dashboard: React.FC = () => {
   const { getToken } = useAuth();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const compact = useMediaQuery(theme.breakpoints.down('sm'));
   const [company, setCompany] = useState<any>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [quick, setQuick] = useState<{ employee: EmployeePreview; bucket: EventBucket } | null>(null);
+  const [toast, setToast] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = await getToken();
-        const headers = { Authorization: `Bearer ${token}` };
-        const compRes = await axios.get(`${API_URL}/companies/`, { headers });
-        if (compRes.data.length === 0) { navigate('/onboarding'); return; }
-        const comp = compRes.data[0];
-        setCompany(comp);
-        const prevRes = await axios.get(`${API_URL}/payroll/preview/${comp.id}`, { headers });
-        setPreview(prevRes.data);
-      } catch (error) {
-        console.error('Dashboard data load failed', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+  const loadData = useCallback(async () => {
+    try {
+      const token = await getToken();
+      const headers = { Authorization: `Bearer ${token}` };
+      const compRes = await axios.get(`${API_URL}/companies/`, { headers });
+      if (compRes.data.length === 0) { navigate('/onboarding'); return; }
+      const comp = compRes.data[0];
+      setCompany(comp);
+      const prevRes = await axios.get(`${API_URL}/payroll/preview/${comp.id}`, { headers });
+      setPreview(prevRes.data);
+    } catch (error) {
+      console.error('Dashboard data load failed', error);
+    } finally {
+      setLoading(false);
+    }
   }, [getToken, navigate]);
+
+  const refreshPreview = useCallback(async () => {
+    if (!company) return;
+    try {
+      const token = await getToken();
+      const prevRes = await axios.get(`${API_URL}/payroll/preview/${company.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setPreview(prevRes.data);
+    } catch (error) {
+      console.error('Preview refresh failed', error);
+    }
+  }, [getToken, company]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleSaved = async () => {
+    await refreshPreview();
+    setToast(true);
+  };
 
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}><CircularProgress /></Box>;
@@ -137,8 +162,39 @@ const Dashboard: React.FC = () => {
                   <ListItem
                     disablePadding
                     secondaryAction={
-                      <Chip label={money(emp.net_salary)} variant="outlined" color="primary"
-                        sx={{ borderWidth: 2, bgcolor: '#fff' }} />
+                      <Stack direction="row" spacing={compact ? 0.5 : 1} alignItems="center">
+                        {compact ? (
+                          <>
+                            <Tooltip title="Registrar ingreso">
+                              <IconButton size="small" color="primary"
+                                onClick={() => setQuick({ employee: emp, bucket: 'ingreso' })}>
+                                <AddIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Registrar descuento">
+                              <IconButton size="small" color="secondary"
+                                onClick={() => setQuick({ employee: emp, bucket: 'descuento' })}>
+                                <RemoveIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </>
+                        ) : (
+                          <>
+                            <Button size="small" startIcon={<AddIcon />} color="primary" variant="outlined"
+                              sx={{ borderWidth: 2 }}
+                              onClick={() => setQuick({ employee: emp, bucket: 'ingreso' })}>
+                              Ingreso
+                            </Button>
+                            <Button size="small" startIcon={<RemoveIcon />} color="secondary" variant="outlined"
+                              sx={{ borderWidth: 2 }}
+                              onClick={() => setQuick({ employee: emp, bucket: 'descuento' })}>
+                              Descuento
+                            </Button>
+                          </>
+                        )}
+                        <Chip label={money(emp.net_salary)} variant="outlined" color="primary"
+                          sx={{ borderWidth: 2, bgcolor: '#fff' }} />
+                      </Stack>
                     }
                   >
                     <ListItemButton sx={{ py: 1.5, px: 2.5 }}
@@ -207,6 +263,26 @@ const Dashboard: React.FC = () => {
           </CardContent>
         </Card>
       </Stack>
+
+      <QuickEventDialog
+        open={!!quick}
+        bucket={quick?.bucket ?? 'ingreso'}
+        employee={quick?.employee ?? null}
+        companyId={company?.id ?? ''}
+        onClose={() => setQuick(null)}
+        onSaved={handleSaved}
+      />
+
+      <Snackbar
+        open={toast}
+        autoHideDuration={3000}
+        onClose={() => setToast(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setToast(false)} severity="success" variant="filled" sx={{ width: '100%' }}>
+          Novedad registrada
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

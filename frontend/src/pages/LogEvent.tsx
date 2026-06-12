@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api_config';
+import { EVENT_TYPES, isHourBased } from '../lib/payrollEvents';
 
 const LogEvent: React.FC = () => {
   const { getToken } = useAuth();
@@ -73,23 +74,13 @@ const LogEvent: React.FC = () => {
             value={event.type}
             onChange={(e) => setEvent({ ...event, type: e.target.value })}
           >
-            <MenuItem value="Horas Suplementarias (50%)">Horas Suplementarias (50%)</MenuItem>
-            <MenuItem value="Horas Extraordinarias (100%)">Horas Extraordinarias (100%)</MenuItem>
-            <MenuItem value="Overtime 50%">Horas Extras 50% (monto)</MenuItem>
-            <MenuItem value="Overtime 100%">Horas Extras 100% (monto)</MenuItem>
-            <MenuItem value="Commission">Comisión</MenuItem>
-            <MenuItem value="Bonus">Bono</MenuItem>
-            <MenuItem value="Préstamo Quirografario IESS">Préstamo Quirografario IESS</MenuItem>
-            <MenuItem value="Préstamo Hipotecario (Biess)">Préstamo Hipotecario (Biess)</MenuItem>
-            <MenuItem value="Anticipo de Sueldo">Anticipo de Sueldo</MenuItem>
-            <MenuItem value="Multa">Multa (tope 10%)</MenuItem>
-            <MenuItem value="Falta / Atraso">Falta / Atraso</MenuItem>
-            <MenuItem value="Deduction">Otro Descuento</MenuItem>
+            {EVENT_TYPES.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+            ))}
           </TextField>
 
           {(() => {
-            const hourBased = ['Horas Suplementarias (50%)', 'Horas Extraordinarias (100%)', 'Falta / Atraso'];
-            const isHours = hourBased.includes(event.type);
+            const isHours = isHourBased(event.type);
             return (
               <TextField
                 fullWidth
