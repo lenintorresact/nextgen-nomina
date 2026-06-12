@@ -20,6 +20,11 @@ class Company(BaseModel):
     name: str
     region: Region
     owner_id: str
+    # Estado del ciclo de nómina (progresión lineal):
+    # current_period = período abierto actual (YYYY-MM); None => mes calendario.
+    # closed_periods = períodos ya cerrados.
+    current_period: Optional[str] = None
+    closed_periods: List[str] = Field(default_factory=list)
 
 class Employee(BaseModel):
     id: Optional[str] = None
@@ -79,6 +84,11 @@ class PayrollEvent(BaseModel):
     amount: float
     description: str
     date: datetime
+    # Período (YYYY-MM) al que pertenece la novedad. Se sella con el período
+    # abierto de la empresa al registrarla; en eventos antiguos (sin este campo)
+    # se deriva de `date`. Esto permite que una novedad registrada tras el cierre
+    # caiga en el siguiente período aunque su fecha sea del mes ya cerrado.
+    period: Optional[str] = None
 
 class PayrollSlip(BaseModel):
     id: Optional[str] = None

@@ -22,20 +22,46 @@ def _verify_company_ownership(company_id: str, user) -> dict:
     return company_doc.to_dict()
 
 
+def _current_period(company: dict) -> str:
+    """Período abierto actual de la empresa; por defecto el mes calendario (EC)."""
+    return company.get("current_period") or datetime.now(EC_TZ).strftime("%Y-%m")
+
+
+def _next_period(period: str) -> str:
+    """Siguiente período YYYY-MM."""
+    year, month = int(period[:4]), int(period[5:7])
+    return f"{year + 1}-01" if month == 12 else f"{year}-{month + 1:02d}"
+
+
+def _delete_company_slips_for_period(company_id: str, period: str) -> None:
+    """Borra los roles persistidos de una empresa en un período (cierre idempotente)."""
+    docs = db.collection("slips").where("company_id", "==", company_id).stream()
+    for d in docs:
+        if d.to_dict().get("period") == period:
+            d.reference.delete()
+
+
 def _employee_events_for_period(employee_id: str, period: str) -> List[PayrollEvent]:
     """Events belonging to an employee that fall within a YYYY-MM period.
 
     Kept as a single-field query (by employee_id) plus an in-memory month
     filter on purpose: this avoids requiring a Firestore composite index.
+    El período de una novedad es su campo `period` si existe; si no (eventos
+    antiguos), se deriva de la fecha.
     """
     events_docs = db.collection("events").where("employee_id", "==", employee_id).stream()
     events = [PayrollEvent(**{**ev.to_dict(), "id": ev.id}) for ev in events_docs]
-    return [e for e in events if e.date.strftime("%Y-%m") == period]
+    return [e for e in events if (e.period or e.date.strftime("%Y-%m")) == period]
 
 @router.post("/events", response_model=PayrollEvent)
 async def log_event(event: PayrollEvent, user=Depends(get_current_user)):
     # Verify ownership via company
-    _verify_company_ownership(event.company_id, user)
+    company = _verify_company_ownership(event.company_id, user)
+
+    # Sella la novedad con el período abierto actual: tras un cierre, las nuevas
+    # novedades caen en el siguiente período aunque su fecha sea del mes cerrado.
+    if not event.period:
+        event.period = _current_period(company)
 
     event_data = event.dict(exclude={"id"})
     doc_ref = db.collection("events").document()
@@ -53,11 +79,11 @@ async def preview_payroll(company_id: str, period: str = None, user=Depends(get_
     running monthly totals recalculate — no need to "close" the period.
     Defaults to the current month in Ecuador's timezone.
     """
-    _verify_company_ownership(company_id, user)
+    company = _verify_company_ownership(company_id, user)
 
     now_ec = datetime.now(EC_TZ)
     if not period:
-        period = now_ec.strftime("%Y-%m")
+        period = _current_period(company)
 
     employees_docs = db.collection("employees").where("company_id", "==", company_id).stream()
 
@@ -105,7 +131,19 @@ async def preview_payroll(company_id: str, period: str = None, user=Depends(get_
 @router.post("/close-period/{company_id}/{period}", response_model=List[PayrollSlip])
 async def close_period(company_id: str, period: str, user=Depends(get_current_user)):
     # Verify ownership
-    _verify_company_ownership(company_id, user)
+    company = _verify_company_ownership(company_id, user)
+
+    # Progresión lineal: solo se puede cerrar el período abierto actual.
+    open_period = _current_period(company)
+    if period != open_period:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Solo puedes cerrar el período abierto ({open_period}).",
+        )
+
+    # Cierre idempotente: si ya había roles de este período (re-cierre), se borran
+    # antes de regenerarlos para no duplicar.
+    _delete_company_slips_for_period(company_id, period)
 
     # Get all employees for company
     employees_docs = db.collection("employees").where("company_id", "==", company_id).stream()
@@ -145,7 +183,43 @@ async def close_period(company_id: str, period: str, user=Depends(get_current_us
         slip_data["id"] = doc_ref.id
         slips.append(PayrollSlip(**slip_data))
 
+    # Marca el período como cerrado y avanza el período abierto al siguiente mes.
+    closed = company.get("closed_periods") or []
+    if period not in closed:
+        closed.append(period)
+    db.collection("companies").document(company_id).update({
+        "closed_periods": closed,
+        "current_period": _next_period(period),
+    })
+
     return slips
+
+
+@router.post("/reopen-period/{company_id}/{period}")
+async def reopen_period(company_id: str, period: str, user=Depends(get_current_user)):
+    """Reabre el período cerrado más reciente (rollback lineal).
+
+    Borra los roles persistidos de ese período y vuelve a ponerlo como período
+    abierto, de modo que se puedan registrar/corregir novedades nuevamente.
+    """
+    company = _verify_company_ownership(company_id, user)
+    closed = company.get("closed_periods") or []
+
+    # Solo se reabre el período inmediatamente anterior al abierto (lineal).
+    if period not in closed or _next_period(period) != _current_period(company):
+        raise HTTPException(
+            status_code=400,
+            detail="Solo puedes reabrir el último período cerrado.",
+        )
+
+    _delete_company_slips_for_period(company_id, period)
+    closed = [p for p in closed if p != period]
+    db.collection("companies").document(company_id).update({
+        "closed_periods": closed,
+        "current_period": period,
+    })
+
+    return {"company_id": company_id, "current_period": period, "closed_periods": closed}
 
 
 @router.get("/settlement/{employee_id}")
