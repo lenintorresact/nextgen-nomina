@@ -53,6 +53,25 @@ def _employee_events_for_period(employee_id: str, period: str) -> List[PayrollEv
     events = [PayrollEvent(**{**ev.to_dict(), "id": ev.id}) for ev in events_docs]
     return [e for e in events if (e.period or e.date.strftime("%Y-%m")) == period]
 
+@router.get("/legal-constants")
+async def legal_constants_current(user=Depends(get_current_user)):
+    """Constantes legales del año en curso, para que el frontend no las codifique.
+
+    Expone el SBU (sueldo por defecto), el inicio de la base gravable del IR
+    (primer tramo > 0%) y la tasa de aporte personal IESS — usados para defaults
+    y para mostrar la sección de IR solo cuando el sueldo llega a ser gravable.
+    """
+    year = datetime.now(EC_TZ).year
+    c = legal_constants.for_year(year)
+    return {
+        "year": year,
+        "sbu": c.sbu,
+        # Fin del tramo 0% = fracción básica desgravada (donde empieza a pagarse IR).
+        "ir_min_taxable_annual": c.ir_brackets[0][1],
+        "iess_employee": c.iess_employee,
+    }
+
+
 @router.post("/events", response_model=PayrollEvent)
 async def log_event(event: PayrollEvent, user=Depends(get_current_user)):
     # Verify ownership via company

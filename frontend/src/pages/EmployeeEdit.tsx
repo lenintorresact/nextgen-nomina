@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import API_URL from '../api_config';
 import EmployeeForm, { emptyEmployee, type EmployeeFormValues } from '../components/EmployeeForm';
 import { toEmployeePayload } from './AddEmployee';
+import { fetchOrgContext, type OrgContext } from '../lib/orgContext';
 
 // El backend devuelve start_date como ISO datetime; el input date necesita YYYY-MM-DD.
 const toFormValues = (data: any): EmployeeFormValues => ({
@@ -36,6 +37,7 @@ const EmployeeEdit: React.FC = () => {
   const { getToken } = useAuth();
   const [initial, setInitial] = useState<EmployeeFormValues | null>(null);
   const [companyId, setCompanyId] = useState('');
+  const [ctx, setCtx] = useState<OrgContext | null>(null);
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -45,11 +47,13 @@ const EmployeeEdit: React.FC = () => {
   const load = useCallback(async () => {
     try {
       const token = await getToken();
-      const res = await axios.get(`${API_URL}/employees/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const [res, orgCtx] = await Promise.all([
+        axios.get(`${API_URL}/employees/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetchOrgContext(getToken),
+      ]);
       setInitial(toFormValues(res.data));
       setCompanyId(res.data.company_id);
+      setCtx(orgCtx);
       setName(`${res.data.first_name} ${res.data.last_name}`);
     } catch (error) {
       console.error('Failed to load employee', error);
@@ -103,7 +107,9 @@ const EmployeeEdit: React.FC = () => {
         <CardContent>
           <Typography variant="h4" gutterBottom>{name}</Typography>
           <Typography color="textSecondary" gutterBottom>Datos del empleado</Typography>
-          <EmployeeForm initial={initial} submitLabel="Guardar cambios" saving={saving} onSubmit={handleSubmit} />
+          <EmployeeForm initial={initial} submitLabel="Guardar cambios" saving={saving}
+            companyRegion={ctx?.companyRegion} irMinAnnual={ctx?.irMinAnnual} iessRate={ctx?.iessRate}
+            onSubmit={handleSubmit} />
         </CardContent>
       </Card>
 
