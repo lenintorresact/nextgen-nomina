@@ -104,6 +104,20 @@ async def preview_payroll(company_id: str, period: str = None, user=Depends(get_
         emp_data["id"] = emp_doc.id
         employee = Employee(**emp_data)
 
+        if not employee.active:
+            # Dado de baja en el período abierto: se muestra deshabilitado, sin
+            # entrar en los totales. Si la baja es de un período ya cerrado, se omite.
+            if employee.termination_period == period:
+                employees_preview.append({
+                    "employee_id": employee.id,
+                    "first_name": employee.first_name,
+                    "last_name": employee.last_name,
+                    "base_salary": employee.salary,
+                    "net_salary": 0.0,
+                    "terminated": True,
+                })
+            continue
+
         period_events = _employee_events_for_period(employee.id, period)
         calc = PayrollEngine.process_monthly_payroll(
             employee, period_events, current_date=now_ec, period=period
@@ -114,6 +128,7 @@ async def preview_payroll(company_id: str, period: str = None, user=Depends(get_
             "first_name": employee.first_name,
             "last_name": employee.last_name,
             "base_salary": employee.salary,
+            "terminated": False,
             **calc,
         })
 
@@ -153,6 +168,10 @@ async def close_period(company_id: str, period: str, user=Depends(get_current_us
         emp_data = emp_doc.to_dict()
         emp_data["id"] = emp_doc.id
         employee = Employee(**emp_data)
+
+        # Los empleados dados de baja no generan rol mensual (su finiquito es aparte).
+        if not employee.active:
+            continue
 
         period_events = _employee_events_for_period(employee.id, period)
 
@@ -261,6 +280,99 @@ async def settlement(
         pending_reserve_funds=pending_reserve_funds,
         unpaid_amounts=unpaid_amounts,
     )
+
+
+def _load_owned_employee(employee_id: str, user) -> tuple:
+    """Devuelve (employee, company_dict) verificando propiedad, o lanza 404/403."""
+    emp_doc = db.collection("employees").document(employee_id).get()
+    if not emp_doc.exists:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    emp_data = emp_doc.to_dict()
+    emp_data["id"] = emp_doc.id
+    company = _verify_company_ownership(emp_data["company_id"], user)
+    return Employee(**emp_data), company
+
+
+@router.post("/terminate/{employee_id}")
+async def terminate_employee(
+    employee_id: str,
+    termination_date: str,
+    cause: SettlementCause,
+    remuneration: float | None = None,
+    pending_vacation_days: float = 0.0,
+    pending_reserve_funds: float = 0.0,
+    unpaid_amounts: float = 0.0,
+    user=Depends(get_current_user),
+):
+    """Registra el finiquito y da de baja al empleado en el período abierto.
+
+    Persiste la liquidación (colección `settlements`, un doc por empleado) y marca
+    el empleado como inactivo. Mientras no se cierre el período, la baja es
+    reversible vía /reactivate.
+    """
+    employee, company = _load_owned_employee(employee_id, user)
+    try:
+        term = datetime.strptime(termination_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="termination_date must be YYYY-MM-DD")
+
+    settlement = PayrollEngine.calculate_settlement(
+        employee, term, cause,
+        remuneration=remuneration,
+        pending_vacation_days=pending_vacation_days,
+        pending_reserve_funds=pending_reserve_funds,
+        unpaid_amounts=unpaid_amounts,
+    )
+
+    period = _current_period(company)
+    db.collection("settlements").document(employee_id).set({
+        "employee_id": employee_id,
+        "company_id": employee.company_id,
+        "period": period,
+        "termination_date": termination_date,
+        "cause": cause.value,
+        **settlement,
+    })
+    db.collection("employees").document(employee_id).update({
+        "active": False,
+        "termination_date": term,
+        "termination_cause": cause.value,
+        "termination_period": period,
+    })
+
+    return settlement
+
+
+@router.post("/reactivate/{employee_id}")
+async def reactivate_employee(employee_id: str, user=Depends(get_current_user)):
+    """Revierte una baja, solo si ocurrió en el período abierto actual."""
+    employee, company = _load_owned_employee(employee_id, user)
+    if employee.active:
+        raise HTTPException(status_code=400, detail="El empleado no está dado de baja.")
+    if employee.termination_period != _current_period(company):
+        raise HTTPException(
+            status_code=400,
+            detail="Solo puedes reactivar una baja del período abierto actual.",
+        )
+
+    db.collection("employees").document(employee_id).update({
+        "active": True,
+        "termination_date": None,
+        "termination_cause": None,
+        "termination_period": None,
+    })
+    db.collection("settlements").document(employee_id).delete()
+    return {"employee_id": employee_id, "active": True}
+
+
+@router.get("/settlement-record/{employee_id}")
+async def settlement_record(employee_id: str, user=Depends(get_current_user)):
+    """Recupera el finiquito guardado de un empleado dado de baja (para revisión)."""
+    _load_owned_employee(employee_id, user)
+    rec = db.collection("settlements").document(employee_id).get()
+    if not rec.exists:
+        raise HTTPException(status_code=404, detail="No hay finiquito registrado.")
+    return rec.to_dict()
 
 
 @router.get("/payslip/{company_id}/{employee_id}/pdf")

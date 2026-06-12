@@ -46,6 +46,13 @@ class Employee(BaseModel):
     family_burdens: int = 0                    # Nº de cargas familiares
     # Carga con enfermedad catastrófica/rara/huérfana → tope de 100 canastas.
     catastrophic_illness_burden: bool = False
+    # Baja / terminación. Mientras termination_period == período abierto de la
+    # empresa, el empleado aparece deshabilitado y la baja es reversible; al
+    # cerrar ese período, la baja queda en firme.
+    active: bool = True
+    termination_date: Optional[datetime] = None
+    termination_cause: Optional[str] = None
+    termination_period: Optional[str] = None
 
 class EventType(str, Enum):
     OVERTIME_50 = "Overtime 50%"

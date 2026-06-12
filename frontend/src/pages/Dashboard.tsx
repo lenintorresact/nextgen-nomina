@@ -41,6 +41,7 @@ interface EmployeePreview {
   vacation_provision: number;
   earnings_breakdown: Record<string, number>;
   deductions_breakdown: Record<string, number>;
+  terminated?: boolean;
 }
 
 interface Preview {
@@ -162,55 +163,69 @@ const Dashboard: React.FC = () => {
                   <ListItem
                     disablePadding
                     secondaryAction={
-                      <Stack direction="row" spacing={compact ? 0.5 : 1} alignItems="center">
-                        {compact ? (
-                          <>
-                            <Tooltip title="Registrar ingreso">
-                              <IconButton size="small" color="primary"
+                      emp.terminated ? (
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Button size="small" color="inherit" sx={{ color: 'text.secondary' }}
+                            onClick={() => navigate('/settlement', { state: { reviewEmployeeId: emp.employee_id } })}>
+                            Ver finiquito
+                          </Button>
+                          <Chip label="Dado de baja" size="small" />
+                        </Stack>
+                      ) : (
+                        <Stack direction="row" spacing={compact ? 0.5 : 1} alignItems="center">
+                          {compact ? (
+                            <>
+                              <Tooltip title="Registrar ingreso">
+                                <IconButton size="small" color="primary"
+                                  onClick={() => setQuick({ employee: emp, bucket: 'ingreso' })}>
+                                  <AddIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Registrar descuento">
+                                <IconButton size="small" color="secondary"
+                                  onClick={() => setQuick({ employee: emp, bucket: 'descuento' })}>
+                                  <RemoveIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          ) : (
+                            <>
+                              <Button size="small" startIcon={<AddIcon />} color="primary" variant="outlined"
+                                sx={{ borderWidth: 2 }}
                                 onClick={() => setQuick({ employee: emp, bucket: 'ingreso' })}>
-                                <AddIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Registrar descuento">
-                              <IconButton size="small" color="secondary"
+                                Ingreso
+                              </Button>
+                              <Button size="small" startIcon={<RemoveIcon />} color="secondary" variant="outlined"
+                                sx={{ borderWidth: 2 }}
                                 onClick={() => setQuick({ employee: emp, bucket: 'descuento' })}>
-                                <RemoveIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </>
-                        ) : (
-                          <>
-                            <Button size="small" startIcon={<AddIcon />} color="primary" variant="outlined"
-                              sx={{ borderWidth: 2 }}
-                              onClick={() => setQuick({ employee: emp, bucket: 'ingreso' })}>
-                              Ingreso
-                            </Button>
-                            <Button size="small" startIcon={<RemoveIcon />} color="secondary" variant="outlined"
-                              sx={{ borderWidth: 2 }}
-                              onClick={() => setQuick({ employee: emp, bucket: 'descuento' })}>
-                              Descuento
-                            </Button>
-                          </>
-                        )}
-                        <Tooltip title="Ver rol del mes">
-                          <Chip label={money(emp.net_salary)} variant="outlined" color="primary"
-                            clickable
-                            onClick={() => navigate(`/employee/${emp.employee_id}/rol`, { state: { employee: emp, company } })}
-                            sx={{ borderWidth: 2, bgcolor: '#fff' }} />
-                        </Tooltip>
-                      </Stack>
+                                Descuento
+                              </Button>
+                            </>
+                          )}
+                          <Tooltip title="Ver rol del mes">
+                            <Chip label={money(emp.net_salary)} variant="outlined" color="primary"
+                              clickable
+                              onClick={() => navigate(`/employee/${emp.employee_id}/rol`, { state: { employee: emp, company } })}
+                              sx={{ borderWidth: 2, bgcolor: '#fff' }} />
+                          </Tooltip>
+                        </Stack>
+                      )
                     }
                   >
-                    <ListItemButton sx={{ py: 1.5, px: 2.5 }}
-                      onClick={() => navigate(`/employee/${emp.employee_id}`)}>
+                    <ListItemButton sx={{ py: 1.5, px: 2.5, opacity: emp.terminated ? 0.55 : 1 }}
+                      onClick={() => emp.terminated
+                        ? navigate('/settlement', { state: { reviewEmployeeId: emp.employee_id } })
+                        : navigate(`/employee/${emp.employee_id}`)}>
                       <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: '#DFF4EF', color: 'primary.dark', fontWeight: 800 }}>
+                        <Avatar sx={emp.terminated
+                          ? { bgcolor: '#ECEFEE', color: 'text.secondary', fontWeight: 800 }
+                          : { bgcolor: '#DFF4EF', color: 'primary.dark', fontWeight: 800 }}>
                           {initials(emp.first_name, emp.last_name)}
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
                         primary={<Typography sx={{ fontWeight: 700 }}>{emp.first_name} {emp.last_name}</Typography>}
-                        secondary={`Sueldo base ${money(emp.base_salary)}`}
+                        secondary={emp.terminated ? 'Dado de baja' : `Sueldo base ${money(emp.base_salary)}`}
                       />
                     </ListItemButton>
                   </ListItem>

@@ -31,6 +31,9 @@ async def get_company_employees(company_id: str, user=Depends(get_current_user))
     for doc in docs:
         data = doc.to_dict()
         data["id"] = doc.id
+        # Omite empleados dados de baja: no se les registra novedades ni finiquito.
+        if not data.get("active", True):
+            continue
         employees.append(Employee(**data))
     return employees
 
