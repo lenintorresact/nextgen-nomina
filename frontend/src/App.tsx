@@ -10,7 +10,8 @@ import AddEmployee from './pages/AddEmployee';
 import LogEvent from './pages/LogEvent';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import ClosePeriod from './pages/ClosePeriod';
-import EmployeeDetail from './pages/EmployeeDetail';
+import EmployeeEdit from './pages/EmployeeEdit';
+import PayslipView from './pages/PayslipView';
 import Settlement from './pages/Settlement';
 import './i18n';
 
@@ -77,7 +78,8 @@ function App() {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/add-employee" element={<AddEmployee />} />
-            <Route path="/employee/:id" element={<EmployeeDetail />} />
+            <Route path="/employee/:id" element={<EmployeeEdit />} />
+            <Route path="/employee/:id/rol" element={<PayslipView />} />
             <Route path="/log-event" element={<LogEvent />} />
             <Route path="/close-period" element={<ClosePeriod />} />
             <Route path="/settlement" element={<Settlement />} />

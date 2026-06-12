@@ -12,7 +12,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api_config';
-import { downloadPdf } from './EmployeeDetail';
+import { downloadPdf } from '../lib/pdf';
 import QuickEventDialog from '../components/QuickEventDialog';
 import type { EventBucket } from '../lib/payrollEvents';
 
@@ -192,13 +192,17 @@ const Dashboard: React.FC = () => {
                             </Button>
                           </>
                         )}
-                        <Chip label={money(emp.net_salary)} variant="outlined" color="primary"
-                          sx={{ borderWidth: 2, bgcolor: '#fff' }} />
+                        <Tooltip title="Ver rol del mes">
+                          <Chip label={money(emp.net_salary)} variant="outlined" color="primary"
+                            clickable
+                            onClick={() => navigate(`/employee/${emp.employee_id}/rol`, { state: { employee: emp, company } })}
+                            sx={{ borderWidth: 2, bgcolor: '#fff' }} />
+                        </Tooltip>
                       </Stack>
                     }
                   >
                     <ListItemButton sx={{ py: 1.5, px: 2.5 }}
-                      onClick={() => navigate(`/employee/${emp.employee_id}`, { state: { employee: emp, company } })}>
+                      onClick={() => navigate(`/employee/${emp.employee_id}`)}>
                       <ListItemAvatar>
                         <Avatar sx={{ bgcolor: '#DFF4EF', color: 'primary.dark', fontWeight: 800 }}>
                           {initials(emp.first_name, emp.last_name)}

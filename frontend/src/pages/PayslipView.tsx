@@ -1,42 +1,66 @@
-import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
   Container, Typography, Card, CardContent, Box, Button, Divider,
-  Table, TableBody, TableCell, TableContainer, TableRow
+  Table, TableBody, TableCell, TableContainer, TableRow, CircularProgress,
 } from '@mui/material';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import API_URL from '../api_config';
+import { downloadPdf } from '../lib/pdf';
+import { EVENT_TYPES } from '../lib/payrollEvents';
 
 const money = (n: number) => `$${(n ?? 0).toFixed(2)}`;
 
-export const downloadPdf = async (
-  getToken: () => Promise<string | null>, url: string, filename: string,
-) => {
-  const token = await getToken();
-  const res = await axios.get(url, {
-    headers: { Authorization: `Bearer ${token}` }, responseType: 'blob',
-  });
-  const blobUrl = window.URL.createObjectURL(res.data);
-  const a = document.createElement('a');
-  a.href = blobUrl;
-  a.download = filename;
-  a.click();
-  window.URL.revokeObjectURL(blobUrl);
-};
+// Etiqueta en español para las claves del desglose. El backend usa claves crudas
+// como "base_salary" o el string del tipo de novedad ("Overtime 50%").
+const STATIC_LABELS: Record<string, string> = { base_salary: 'Sueldo base' };
+const labelForKey = (key: string): string =>
+  STATIC_LABELS[key] ?? EVENT_TYPES.find((t) => t.value === key)?.label ?? key;
 
-const EmployeeDetail: React.FC = () => {
+const PayslipView: React.FC = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { getToken } = useAuth();
-  const employee = (location.state as any)?.employee;
-  const company = (location.state as any)?.company;
+
+  const stateEmployee = (location.state as any)?.employee;
+  const stateCompany = (location.state as any)?.company;
+  const [employee, setEmployee] = useState<any>(stateEmployee ?? null);
+  const [company, setCompany] = useState<any>(stateCompany ?? null);
+  const [loading, setLoading] = useState(!stateEmployee);
+
+  // Si llegamos por recarga / enlace directo (sin state), recuperamos empresa
+  // y preview, y ubicamos al empleado por id.
+  const load = useCallback(async () => {
+    try {
+      const token = await getToken();
+      const headers = { Authorization: `Bearer ${token}` };
+      const compRes = await axios.get(`${API_URL}/companies/`, { headers });
+      if (compRes.data.length === 0) return;
+      const comp = compRes.data[0];
+      setCompany(comp);
+      const prevRes = await axios.get(`${API_URL}/payroll/preview/${comp.id}`, { headers });
+      const emp = prevRes.data.employees?.find((e: any) => e.employee_id === id);
+      setEmployee(emp ?? null);
+    } catch (error) {
+      console.error('Failed to load payslip', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [getToken, id]);
+
+  useEffect(() => { if (!stateEmployee) load(); }, [stateEmployee, load]);
+
+  if (loading) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}><CircularProgress /></Box>;
+  }
 
   if (!employee) {
     return (
       <Container sx={{ mt: 4 }}>
         <Button onClick={() => navigate('/dashboard')} sx={{ mb: 2 }}>Volver</Button>
-        <Typography>Abre un empleado desde el tablero para ver su detalle.</Typography>
+        <Typography>No se encontró el rol de este empleado.</Typography>
       </Container>
     );
   }
@@ -47,7 +71,7 @@ const EmployeeDetail: React.FC = () => {
   return (
     <Container sx={{ mt: 4, mb: 6 }} maxWidth="sm">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Button onClick={() => navigate('/dashboard')}>Volver</Button>
+        <Button onClick={() => navigate(`/employee/${id}`)}>Volver</Button>
         {company && (
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button variant="outlined" color="inherit" sx={{ color: 'text.primary' }}
@@ -80,13 +104,13 @@ const EmployeeDetail: React.FC = () => {
               <TableBody>
                 {Object.entries(earnings).map(([key, val]: any) => (
                   <TableRow key={key}>
-                    <TableCell>{key}</TableCell>
+                    <TableCell>{labelForKey(key)}</TableCell>
                     <TableCell align="right">{money(val)}</TableCell>
                   </TableRow>
                 ))}
                 {Object.entries(deductions).map(([key, val]: any) => (
                   <TableRow key={key}>
-                    <TableCell>{key}</TableCell>
+                    <TableCell>{labelForKey(key)}</TableCell>
                     <TableCell align="right" sx={{ color: 'error.main' }}>-{money(val)}</TableCell>
                   </TableRow>
                 ))}
@@ -131,4 +155,4 @@ const EmployeeDetail: React.FC = () => {
   );
 };
 
-export default EmployeeDetail;
+export default PayslipView;
