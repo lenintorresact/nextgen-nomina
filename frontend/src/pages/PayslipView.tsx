@@ -8,15 +8,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import API_URL from '../api_config';
 import { downloadPdf } from '../lib/pdf';
-import { EVENT_TYPES } from '../lib/payrollEvents';
-
-const money = (n: number) => `$${(n ?? 0).toFixed(2)}`;
-
-// Etiqueta en español para las claves del desglose. El backend usa claves crudas
-// como "base_salary" o el string del tipo de novedad ("Overtime 50%").
-const STATIC_LABELS: Record<string, string> = { base_salary: 'Sueldo base' };
-const labelForKey = (key: string): string =>
-  STATIC_LABELS[key] ?? EVENT_TYPES.find((t) => t.value === key)?.label ?? key;
+import { money, labelForKey } from '../lib/payrollLabels';
 
 const PayslipView: React.FC = () => {
   const { id } = useParams();
